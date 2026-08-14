@@ -7,5 +7,4 @@
  *
  * Vazio usa http://127.0.0.1:8000 durante o desenvolvimento local.
  */
-window.LCB_API_BASE_URL = "";
-
+window.LCB_API_BASE_URL = "https://lcb-capacity-api.onrender.com";
