@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LCB Capacity Analytics | Scania</title>
+  <link rel="stylesheet" href="Style.css">
+</head>
+<body>
+
+<!-- OVERLAY mobile sidebar -->
+<div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+
+<!-- DRAWER OVERLAY -->
+<div class="drawer-overlay" id="drawerOverlay" aria-hidden="true"></div>
+
+<!-- DRAWER DE DETALHES -->
+<aside class="details-drawer" id="detailsDrawer" aria-label="Detalhes da análise" aria-hidden="true">
+  <div class="drawer-header">
+    <div class="drawer-header__left">
+      <span class="drawer-header__eyebrow">Análise Detalhada</span>
+      <h2 class="drawer-header__title" id="drawerTitle">Itens do Projeto</h2>
+    </div>
+    <button class="drawer-close" id="drawerClose" type="button" aria-label="Fechar painel">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-meta" id="drawerMeta"></div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-footer">
+    <span class="drawer-footer__info" id="drawerFooterInfo">—</span>
+    <button class="drawer-btn-export" type="button" id="drawerBtnExport">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exportar CSV
+    </button>
+  </div>
+</aside>
+
+<!-- APP SHELL -->
+<div class="app-shell" id="app">
+
+  <!-- HEADER -->
+  <header class="app-header" role="banner">
+    <button class="menu-toggle" id="menuToggle" type="button"
+      aria-label="Alternar menu lateral" aria-expanded="true" aria-controls="sidebar">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </button>
+    <span class="brand" aria-label="Scania">SCANIA</span>
+    <div class="header-divider" aria-hidden="true"></div>
+    <h1 class="app-title">LCB Capacity Analytics</h1>
+    <div class="header-actions">
+      <span class="header-timestamp" id="headerTimestamp">Último cálculo: <strong>—</strong></span>
+      <button class="btn-export" type="button" aria-label="Exportar relatório">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar Relatório
+      </button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <nav class="app-sidebar" id="sidebar" aria-label="Navegação principal">
+    <div class="sidebar-inner">
+      <p class="sidebar-section-label">Principal</p>
+      <ul class="sidebar-nav" role="list">
+        <li>
+          <a class="nav-link active" href="#" data-page="analise" aria-current="page">
+            <span class="nav-icon-wrap">
+              <svg class="nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M14 14l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="nav-label">Análise de Capacidade</span>
+            <span class="nav-tag nav-tag--primary">Principal</span>
+          </a>
+        </li>
+      </ul>
+      <div class="sidebar-footer-info">
+        <div class="sidebar-footer-info__dot"></div>
+        <span>LCB · Logistics Center Brazil</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="app-main" id="mainContent">
+
+    <!-- ================================================================
+         SCREEN: ANÁLISE DE CAPACIDADE
+    ================================================================ -->
+    <section id="screen-analise" class="screen screen--active" aria-label="Análise de Capacidade">
+
+      <div class="page-header">
+        <div class="page-header__left">
+          <span class="page-header__eyebrow">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><path d="M14 14l3 3"/></svg>
+            Análise de Capacidade
+          </span>
+          <h2 class="page-title">Capacidade do LCB</h2>
+          <p class="page-subtitle">Carregue a lista de peças em PD, configure os parâmetros e valide se o LCB suporta a demanda projetada.</p>
+        </div>
+      </div>
+      
+
+      <!-- Grid principal -->
+      <div class="ca-layout">
+
+        <!-- Coluna esquerda: parâmetros -->
+        <div class="ca-layout__inputs">
+          <div class="panel">
+            <h3 class="panel-title">Parâmetros da Análise</h3>
+            <div class="ca-form">
+
+              <!-- ============================================================
+                   SELEÇÃO DE PROJETOS — multi-select
+                   Antes do upload: chips hardcoded (Todos/China/Europa…)
+                   Após upload:     chips dinâmicos vindos do Excel
+                   app.js gerencia a lógica via refreshProjectChipsFromExcel()
+              ============================================================ -->
+              <div class="ca-field">
+                <label class="ca-label" for="caProjectFilter">Projeto Analisado</label>
+                <div class="ca-project-filter" id="caProjectFilter" role="group" aria-label="Selecionar projeto(s)"></div>
+                <p class="ca-field__hint">
+                  Selecione um ou mais projetos para filtrar os indicadores, gráficos e mapa.
+                  Após o upload do Excel os projetos reais substituem os chips acima.
+                </p>
+              </div>
+
+              <div class="ca-divider"><span>Arquivo de PD</span></div>
+
+              <div class="ca-field ca-field--upload">
+                <label class="ca-label">Upload Excel de PD</label>
+                <div class="upload-zone" id="uploadZone">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="opacity:.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span class="upload-zone__title">Arraste o Excel aqui</span>
+                  <span id="uploadLabel" class="upload-zone__sub">ou clique para selecionar (.xlsx, .xls, .csv)</span>
+                  <input type="file" id="excelInput" accept=".xlsx,.xls,.csv" aria-label="Upload de arquivo Excel">
+                </div>
+                <p class="ca-field__hint">Colunas esperadas: PN · Descrição · PE · Qtde PNs/Caixa · Daily Rate · Volume Contratado · storage_zone</p>
+              </div>
+
+              <div class="ca-divider"><span>Parâmetros do LCB</span></div>
+
+              <!-- Linha 1: Capacidade Total + Ocupação Atual -->
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caLcbCapacity">Capacidade Total (caixas)</label>
+                  <input type="number" id="caLcbCapacity" class="ca-input" value="140000" min="1">
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caCurrentOccupation">Ocupação Atual (caixas)</label>
+                  <input type="number" id="caCurrentOccupation" class="ca-input" value="110000" min="0">
+                </div>
+              </div>
+
+              <!-- Linha 2: Período + Margem de Segurança -->
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caAnalysisPeriod">Período de Análise (dias)</label>
+                  <input type="number" id="caAnalysisPeriod" class="ca-input" value="15" min="1" max="365">
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caSafetyMargin">Margem de Segurança (%)</label>
+                  <input type="number" id="caSafetyMargin" class="ca-input" value="10" min="0" max="50">
+                </div>
+              </div>
+
+              <!-- Capacidades por Tipo -->
+              <div class="ca-divider"><span>Capacidades por Tipo</span></div>
+
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlocado">Cap. Blocado (caixas)</label>
+                  <input type="number" id="caCapBlocado" class="ca-input" value="19800" min="0">
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapPortaPallets">Cap. Porta Pallets (caixas)</label>
+                  <input type="number" id="caCapPortaPallets" class="ca-input" value="68000" min="0">
+                </div>
+              </div>
+
+              <div class="ca-row ca-row--single">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlueBox">Cap. Blue Box (caixas)</label>
+                  <input type="number" id="caCapBlueBox" class="ca-input" value="16000" min="0">
+                </div>
+              </div>
+
+              <button class="ca-btn-calc" id="btnCalcAnalise" type="button">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Calcular Análise
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Coluna direita: resultados -->
+        <div class="ca-layout__results" aria-live="polite">
+
+          <!-- Placeholder -->
+          <div class="panel ca-result-placeholder" id="caResultPlaceholder">
+            <div class="ca-placeholder-icon">📊</div>
+            <p class="ca-placeholder-title">Nenhuma análise realizada</p>
+            <p class="ca-placeholder-sub">Preencha os parâmetros e clique em <strong>Calcular Análise</strong> para ver os resultados.</p>
+            <p class="ca-placeholder-sub">Você também pode usar os dados de exemplo para explorar a ferramenta.</p>
+            <button class="ca-btn-mock" id="btnUseMock" type="button">Usar Dados de Exemplo</button>
+          </div>
+
+          <!-- Resultados reais -->
+          <div id="caResultCards" class="ca-result-cards" style="display:none">
+
+            <!-- Veredicto -->
+            <div class="ca-verdict" id="caVerdict">
+              <div class="ca-verdict__icon" id="caVerdictIcon">✓</div>
+              <div class="ca-verdict__text">
+                <strong id="caVerdictTitle">LCB SUPORTA A DEMANDA PROJETADA</strong>
+                <span id="caVerdictSub">Com a margem de segurança aplicada, ainda há capacidade disponível.</span>
+              </div>
+              <button class="ca-verdict__details-btn" id="btnOpenDrawer" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                Ver Detalhes
+              </button>
+            </div>
+
+            <!-- Motor de Cálculo -->
+            <div class="panel ca-engine-panel">
+              <h3 class="panel-title">Cálculo da Capacidade Disponível (caixas)</h3>
+              <div id="caEngineContainer"></div>
+            </div>
+
+            <!-- Donut + Mapa lado a lado -->
+            <div class="ca-main-content-row">
+
+              <!-- COLUNA ESQUERDA: Donut -->
+              <div class="panel ca-composition-panel">
+                <h3 class="panel-title">Composição da Ocupação</h3>
+                <div class="ca-donut-container">
+                  <canvas id="caDonutChart" aria-label="Gráfico de composição da ocupação"></canvas>
+                  <div class="ca-donut-center">
+                    <span class="ca-donut-center__value" id="caDonutCenterValue">—</span>
+                    <span class="ca-donut-center__label" id="caDonutCenterLabel">caixas</span>
+                  </div>
+                </div>
+                <ul class="ca-donut-legend" id="caDonutLegendList" role="list"></ul>
+              </div>
+
+              <!-- COLUNA DIREITA: Mapa do LCB -->
+              <div class="panel ca-map-panel">
+                <div class="ca-map-panel__header">
+                  <h3 class="panel-title">Layout Digital do LCB</h3>
+                  <span class="panel-badge">Digital Twin 2D</span>
+                </div>
+
+                <!-- Controles inline do mapa -->
+                <div class="ca-map-controls">
+                  <div class="ca-map-control-item">
+                    <span class="ca-map-control-label">Timeline</span>
+                    <div class="ca-map-timeline">
+                      <span class="timeline-edge">JAN</span>
+                      <div class="slider-track-wrap ca-map-slider-wrap">
+                        <input type="range" id="timelineRange" class="timeline-slider" min="0" max="23" value="0" step="1"
+                               aria-label="Período de análise" aria-valuetext="JAN/2026">
+                        <div class="slider-progress" id="sliderProgress"></div>
+                      </div>
+                      <span class="timeline-edge">DEZ</span>
+                      <strong class="timeline-selected-badge" id="selectedPeriod">JAN/2026</strong>
+                    </div>
+                  </div>
+                  <div class="ca-map-control-item ca-map-control-item--right">
+                    <span class="ca-map-control-label">Volume Produção</span>
+                    <div class="ca-map-production">
+                      <input type="number" id="productionVolume" class="ca-map-production-input"
+                             value="75" min="0" max="999" aria-label="Volume de produção">
+                      <span class="ca-map-production-unit">veículos/dia</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Mapa -->
+                <div class="warehouse-map" id="warehouseMap"
+                     role="img" aria-label="Mapa interativo do armazém LCB com zonas de armazenagem">
+
+                  <img
+                    src="Images/Layout LCB 4K.png"
+                    alt="Layout LCB 4K — Scania"
+                    class="lcb-floor-plan"
+                    draggable="false"
+                  />
+
+                  <!-- TOOLTIP -->
+                  <div class="zone-tooltip" id="zoneTooltip" aria-hidden="true">
+                    <div class="tooltip-header">
+                      <span class="tooltip-name" id="tooltipName">—</span>
+                      <span class="tooltip-status" id="tooltipStatus">—</span>
+                    </div>
+                    <div class="tooltip-body">
+                      <div class="tooltip-row"><span>Ocupação atual</span><strong id="tooltipOccupation">—</strong></div>
+                      <div class="tooltip-row"><span>Capacidade total</span><strong id="tooltipCapacity">—</strong></div>
+                      <div class="tooltip-row"><span>Disponível</span><strong id="tooltipAvailable">—</strong></div>
+                      <div class="tooltip-row tooltip-note" id="tooltipNote"></div>
+                    </div>
+                  </div>
+                </div>
+                <!-- /warehouse-map -->
+
+                <!-- Rodapé do mapa -->
+                <div class="ca-map-footer">
+                  <div class="ca-map-footer__left">
+                    <span class="ca-map-footer__label">Cálculo da Capacidade</span>
+                    <span class="ca-map-footer__badges" id="warehouseTriggerBadges"></span>
+                  </div>
+                  <div class="ca-map-footer__right">
+                    <span class="ca-map-footer__status-text" id="warehouseTriggerSub">Mapa do LCB com indicadores em tempo real</span>
+                  </div>
+                </div>
+
+                <!-- Legenda das zonas -->
+                <div class="lcb-zone-legend">
+                  <span class="lzl-item"><span class="lzl-dot" style="background:#7c3aed"></span>BASE 10</span>
+                  <span class="lzl-item"><span class="lzl-dot" style="background:#6d28d9"></span>BASE 20</span>
+                  <span class="lzl-item"><span class="lzl-dot" style="background:#64748b"></span>BLUE BOX PALLET</span>
+                  <span class="lzl-item"><span class="lzl-dot" style="background:#a855f7"></span>BLOCADO</span>
+                </div>
+                <p class="panel-hint">* Clique em uma área para visualizar detalhes da zona</p>
+              </div>
+              <!-- /ca-map-panel -->
+
+            </div>
+            <!-- /ca-main-content-row -->
+
+          </div>
+          <!-- /caResultCards -->
+
+        </div>
+        <!-- /ca-layout__results -->
+
+      </div>
+      <!-- /ca-layout -->
+
+    </section><!-- /screen-analise -->
+
+  </main>
+</div><!-- /app-shell -->
+
+<!-- Modal de zona -->
+<dialog class="zone-modal" id="zoneModal" aria-labelledby="modalTitle">
+  <header class="modal-header">
+    <h2 id="modalTitle" class="modal-title">Detalhes da Área</h2>
+    <button class="modal-close" id="modalClose" type="button" aria-label="Fechar">✕</button>
+  </header>
+  <div class="modal-body" id="modalBody"></div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<script src="api.js" defer></script>
+<script src="zones-overlay.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>
