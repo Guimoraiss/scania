@@ -35,3 +35,10 @@ Abra `http://localhost:5500` no navegador.
 
 Nunca envie `backend/.env` ao GitHub. Use esse arquivo somente para as
 credenciais locais do backend.
+
+## Backend no Render
+
+O arquivo `render.yaml` configura automaticamente o backend FastAPI no plano
+gratuito. No Render, crie um **Blueprint**, conecte este repositorio e confirme
+o servico `lcb-capacity-api`. Depois do deploy, copie a URL `onrender.com` para
+`config.js` e envie a alteracao ao GitHub.

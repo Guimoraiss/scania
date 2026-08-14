@@ -11,10 +11,10 @@ venv/
 # Arquivos gerados em execucao
 backend/logs/
 backend/runlog.txt
+backend/server.*.log
 backend/attachments/
 backend/Data/ocr_debug/
 
 # Arquivos do sistema operacional
 desktop.ini
 .DS_Store
-
