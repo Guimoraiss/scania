@@ -19,7 +19,9 @@
    CONFIGURAÇÃO
 ========================================================================= */
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = String(
+  window.LCB_API_BASE_URL || "http://127.0.0.1:8000"
+).replace(/\/$/, "");
 const ENDPOINTS = {
   upload:       `${API_BASE_URL}/excel/upload`,
   simulate:     `${API_BASE_URL}/excel/simulate`,

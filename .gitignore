@@ -1,0 +1,20 @@
+# Segredos e configuracao local
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Arquivos gerados em execucao
+backend/logs/
+backend/runlog.txt
+backend/attachments/
+backend/Data/ocr_debug/
+
+# Arquivos do sistema operacional
+desktop.ini
+.DS_Store
+
