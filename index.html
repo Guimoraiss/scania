@@ -102,7 +102,6 @@
           <p class="page-subtitle">Carregue a lista de peças em PD, configure os parâmetros e valide se o LCB suporta a demanda projetada.</p>
         </div>
       </div>
-      
 
       <!-- Grid principal -->
       <div class="ca-layout">
@@ -113,12 +112,7 @@
             <h3 class="panel-title">Parâmetros da Análise</h3>
             <div class="ca-form">
 
-              <!-- ============================================================
-                   SELEÇÃO DE PROJETOS — multi-select
-                   Antes do upload: chips hardcoded (Todos/China/Europa…)
-                   Após upload:     chips dinâmicos vindos do Excel
-                   app.js gerencia a lógica via refreshProjectChipsFromExcel()
-              ============================================================ -->
+              <!-- Seleção de projetos -->
               <div class="ca-field">
                 <label class="ca-label" for="caProjectFilter">Projeto Analisado</label>
                 <div class="ca-project-filter" id="caProjectFilter" role="group" aria-label="Selecionar projeto(s)"></div>
@@ -167,26 +161,57 @@
                 </div>
               </div>
 
-              <!-- Capacidades por Tipo -->
-              <div class="ca-divider"><span>Capacidades por Tipo</span></div>
+              <!-- ── OCUPADAS POR TIPO ─────────────────────────────── -->
+              <div class="ca-divider"><span>Ocupadas por Tipo</span></div>
 
+              <!-- Linha 1 -->
               <div class="ca-row">
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapBlocado">Cap. Blocado (caixas)</label>
-                  <input type="number" id="caCapBlocado" class="ca-input" value="19800" min="0">
+                  <label class="ca-label" for="caCapPortaPalletsB10">Porta Pallets Base 10 </label>
+                  <input type="number" id="caCapPortaPalletsB10" class="ca-input" value="37400" min="0">
                 </div>
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapPortaPallets">Cap. Porta Pallets (caixas)</label>
-                  <input type="number" id="caCapPortaPallets" class="ca-input" value="68000" min="0">
+                  <label class="ca-label" for="caCapPortaPalletsB20">Porta Pallets Base 20 </label>
+                  <input type="number" id="caCapPortaPalletsB20" class="ca-input" value="30600" min="0">
                 </div>
               </div>
 
-              <div class="ca-row ca-row--single">
+              <!-- Linha 2 -->
+              <div class="ca-row">
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapBlueBox">Cap. Blue Box (caixas)</label>
-                  <input type="number" id="caCapBlueBox" class="ca-input" value="16000" min="0">
+                  <label class="ca-label" for="caCapBlueBoxB10">Blue Box Base 10 </label>
+                  <input type="number" id="caCapBlueBoxB10" class="ca-input" value="8000" min="0">
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlueBoxB20">Blue Box Base 20 </label>
+                  <input type="number" id="caCapBlueBoxB20" class="ca-input" value="8000" min="0">
                 </div>
               </div>
+
+              <!-- Linha 3 -->
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlueBoxIndividual">Blue Box Individual </label>
+                  <input type="number" id="caCapBlueBoxIndividual" class="ca-input" value="4200" min="0">
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlocado">Cap. Blocado </label>
+                  <input type="number" id="caCapBlocado" class="ca-input" value="19800" min="0">
+                </div>
+              </div>
+
+              <!-- Linha 4 -->
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapTMX">T;M;4;0;X;90 </label>
+                  <input type="number" id="caCapTMX" class="ca-input" value="0" min="0">
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caVolumeFuturo">Volume de Produto (atual) </label>
+                  <input type="number" id="caVolumeFuturo" class="ca-input" value="0" min="0">
+                </div>
+              </div>
+              <!-- ── /OCUPADAS POR TIPO ────────────────────────────── -->
 
               <button class="ca-btn-calc" id="btnCalcAnalise" type="button">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -270,7 +295,7 @@
                     </div>
                   </div>
                   <div class="ca-map-control-item ca-map-control-item--right">
-                    <span class="ca-map-control-label">Volume Produção</span>
+                    <span class="ca-map-control-label">Volume Produção Futura </span>
                     <div class="ca-map-production">
                       <input type="number" id="productionVolume" class="ca-map-production-input"
                              value="75" min="0" max="999" aria-label="Volume de produção">

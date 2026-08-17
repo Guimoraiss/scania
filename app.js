@@ -26,20 +26,20 @@ const STATUS_THRESHOLD = { WARNING: 80, CRITICAL: 90 };
 const LOCALE = "pt-BR";
 
 /* =========================================================================
-   ZONE_DATA — 10 zonas reais do LCB
+   ZONE_DATA — zonas reais do LCB (v7.3: bbpallet → bbpalletb10 + bbpalletb20)
 ========================================================================= */
 const ZONE_DATA = {
   base10: {
     name:     "BASE 10",
     baseOcc:  82,
-    capacity: 68_000,
+    capacity: 37_400,
     note:     "Armazenamento em pallet racks verticais — setor superior (BASE 10).",
     color:    "#4c1d95",
   },
   base20: {
     name:     "BASE 20",
     baseOcc:  79,
-    capacity: 55_200,
+    capacity: 30_600,
     note:     "Armazenamento em pallet racks verticais — setor inferior (BASE 20).",
     color:    "#5b21b6",
   },
@@ -64,12 +64,19 @@ const ZONE_DATA = {
     note:     "Dock de recebimento e conferência de materiais.",
     color:    "#1e40af",
   },
-  bbpallet: {
-    name:     "BLUE BOX PALLET",
+  bbpalletb10: {
+    name:     "BLUE BOX BASE 10",
     baseOcc:  74,
-    capacity: 16_000,
-    note:     "Armazenamento de blue boxes em pallets de grande porte.",
-    color:    "#334155",
+    capacity: 8_000,
+    note:     "Armazenamento de blue boxes em pallets — Base 10.",
+    color:    "#0e7490",
+  },
+  bbpalletb20: {
+    name:     "BLUE BOX BASE 20",
+    baseOcc:  74,
+    capacity: 8_000,
+    note:     "Armazenamento de blue boxes em pallets — Base 20.",
+    color:    "#0891b2",
   },
   bbindividual: {
     name:     "BLUE BOX INDIVIDUAL",
@@ -77,6 +84,13 @@ const ZONE_DATA = {
     capacity: 4_200,
     note:     "Estoque de blue boxes individuais prontas para uso na linha.",
     color:    "#0f766e",
+  },
+  tmx: {
+    name:     "T;M;4;0;X;90",
+    baseOcc:  30,
+    capacity: 0,
+    note:     "Zona de armazenagem T;M;4;0;X;90.",
+    color:    "#b45309",
   },
   expedicao: {
     name:     "EXPEDIÇÃO",
@@ -108,8 +122,10 @@ const ZONE_LAYOUT = {
   base10:       { x: 200, y: 6,   w: 808, h: 300 },
   base20:       { x: 200, y: 306, w: 808, h: 248 },
   blocado:      { x: 1008, y: 6,  w: 226, h: 560 },
-  bbpallet:     { x: 130, y: 554, w: 422, h: 130 },
+  bbpalletb10:  { x: 130, y: 554, w: 422, h: 65  },
+  bbpalletb20:  { x: 130, y: 619, w: 422, h: 65  },
   bbindividual: { x: 130, y: 684, w: 422, h: 50  },
+  tmx:          { x: 552, y: 306, w: 456, h: 248 },
   expedicao:    { x: 552, y: 554, w: 456, h: 180 },
   kd:           { x: 1008, y: 566, w: 226, h: 80 },
   im:           { x: 1008, y: 646, w: 226, h: 88 },
@@ -180,6 +196,42 @@ function formatTimestamp() {
   const now = new Date();
   const pad = n => String(n).padStart(2, "0");
   return `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+/* =========================================================================
+   SINCRONIZA ZONE_DATA COM OS CAMPOS DE CAPACIDADE DIGITADOS (v7.3)
+========================================================================= */
+function syncZoneCapacitiesFromInputs() {
+  const capBlocado           = Number(el("caCapBlocado")?.value)           || 0;
+  const capPortaPalletsB10   = Number(el("caCapPortaPalletsB10")?.value)   || 0;
+  const capPortaPalletsB20   = Number(el("caCapPortaPalletsB20")?.value)   || 0;
+  const capBlueBoxB10        = Number(el("caCapBlueBoxB10")?.value)        || 0;
+  const capBlueBoxB20        = Number(el("caCapBlueBoxB20")?.value)        || 0;
+  const capBlueBoxIndividual = Number(el("caCapBlueBoxIndividual")?.value) || 0;
+  const capTMX               = Number(el("caCapTMX")?.value)               || 0;
+
+  ZONE_DATA.base10.capacity       = capPortaPalletsB10;
+  ZONE_DATA.base20.capacity       = capPortaPalletsB20;
+  ZONE_DATA.blocado.capacity      = capBlocado;
+  ZONE_DATA.bbpalletb10.capacity  = capBlueBoxB10;
+  ZONE_DATA.bbpalletb20.capacity  = capBlueBoxB20;
+  ZONE_DATA.bbindividual.capacity = capBlueBoxIndividual;
+  ZONE_DATA.tmx.capacity          = capTMX;
+}
+
+/* =========================================================================
+   HELPER — lê os valores de projeção futura dos inputs e repassa ao overlay
+========================================================================= */
+function _syncFutureVolumeContext() {
+  const currentOcc  = Number(el("caCurrentOccupation")?.value) || 0;
+  const volumeAtual = Number(el("caVolumeFuturo")?.value)      || 0;
+  const volumeFut   = Number(el("productionVolume")?.value)    || 0;
+
+  window.lcbZonesOverlay?.setOverlayContext?.({
+    currentOcc,
+    volumeAtual,
+    volumeFuturo: volumeFut,
+  });
 }
 
 /* =========================================================================
@@ -292,7 +344,6 @@ function renderTimelineTicks() {
     const [mon] = p.split("/");
     const m = _MONTH_TO_NUM[mon] ?? 1;
     if (m !== 1 && m !== 4 && m !== 7 && m !== 10) return;
-
     const pct = (i / (total - 1)) * 100;
     const label = periodToQuarterLabel(p);
     ticks.push({ pct, label, i });
@@ -328,6 +379,8 @@ function initMapControls() {
   el("productionVolume")?.addEventListener("input", e => {
     const v = Number(e.target.value);
     State.productionVolume = Number.isFinite(v) && v >= 0 ? v : 0;
+    // Repassa volume futuro ao overlay ao mudar o slider
+    _syncFutureVolumeContext();
     if (State.hasRealData && State.lastResult) {
       syncWarehouseFromResult(State.lastResult);
     } else {
@@ -346,17 +399,17 @@ function initMapControls() {
 }
 
 /* =========================================================================
-   WAREHOUSE TRIGGER BADGES
+   WAREHOUSE TRIGGER BADGES (v7.3)
 ========================================================================= */
 function updateWarehouseTriggerBadges(rates) {
   const container = el("warehouseTriggerBadges");
   if (!container) return;
 
   const featured = [
-    { id: "base10",    label: "BASE 10"   },
-    { id: "base20",    label: "BASE 20"   },
-    { id: "bbpallet",  label: "BB Pallet" },
-    { id: "expedicao", label: "Expedição" },
+    { id: "base10",      label: "BASE 10"    },
+    { id: "base20",      label: "BASE 20"    },
+    { id: "bbpalletb10", label: "BB P. B10"  },
+    { id: "bbpalletb20", label: "BB P. B20"  },
   ];
 
   container.innerHTML = featured.map(({ id, label }) => {
@@ -401,11 +454,15 @@ function renderWarehouseOverlay(sourceRows, result) {
 
   const project = State.selectedProject;
 
+  // Passa contexto incluindo valores para cálculo de ocupação futura
   overlay.setOverlayContext?.({
     selectedPeriod,
     project,
     thresholdMedium: STATUS_THRESHOLD.WARNING,
     thresholdHigh:   STATUS_THRESHOLD.CRITICAL,
+    currentOcc:   Number(el("caCurrentOccupation")?.value) || 0,
+    volumeAtual:  Number(el("caVolumeFuturo")?.value)      || 0,
+    volumeFuturo: State.productionVolume                   || 0,
   });
 
   overlay.renderZoneOverlay(rows, {
@@ -452,7 +509,6 @@ function updateWarehouseSimulated() {
 function syncWarehouseFromResult(result) {
   if (!result) return;
 
-  const cap          = result.capacity ?? 140_000;
   const projectedOcc = Math.round(result.projectedOcc ?? result.projected ?? 0);
 
   const zoneKeys  = Object.keys(ZONE_DATA);
@@ -460,11 +516,11 @@ function syncWarehouseFromResult(result) {
   const rates = {};
   zoneKeys.forEach(id => {
     const z     = ZONE_DATA[id];
-    const share = z.capacity / zoneTotal;
+    const share = zoneTotal > 0 ? z.capacity / zoneTotal : 0;
     const zOcc  = Math.round(z.capacity * (z.baseOcc / 100));
     const zAdd  = Math.round(projectedOcc * share);
     const zProj = Math.min(z.capacity, zOcc + zAdd);
-    rates[id]   = Math.round((zProj / z.capacity) * 100);
+    rates[id]   = z.capacity > 0 ? Math.round((zProj / z.capacity) * 100) : 0;
   });
 
   renderZones(rates);
@@ -503,7 +559,7 @@ function renderSliderProgress(periodIndex) {
 }
 
 /* =========================================================================
-   TOOLTIP — 10 zonas via .lcb-zone[data-zone]
+   TOOLTIP — zonas via .lcb-zone[data-zone]
 ========================================================================= */
 const Tooltip = {
   el: null,
@@ -536,14 +592,15 @@ const Tooltip = {
     const rate   = this._getRate(id);
     const status = statusByRate(rate);
     const labels = { ok: "DISPONÍVEL", warning: "ATENÇÃO", critical: "CRÍTICO" };
-    const avail  = Math.round(data.capacity * (1 - rate / 100));
+    const cap    = data.capacity;
+    const avail  = cap > 0 ? Math.round(cap * (1 - rate / 100)) : 0;
 
     el("tooltipName").textContent       = data.name;
     el("tooltipStatus").textContent     = labels[status];
     el("tooltipStatus").className       = `tooltip-status tooltip-status--${status}`;
     el("tooltipOccupation").textContent = fmt.pct(rate);
-    el("tooltipCapacity").textContent   = fmt.boxes(data.capacity);
-    el("tooltipAvailable").textContent  = fmt.boxes(avail);
+    el("tooltipCapacity").textContent   = cap > 0 ? fmt.boxes(cap) : "Não configurado";
+    el("tooltipAvailable").textContent  = cap > 0 ? fmt.boxes(avail) : "—";
     el("tooltipNote").textContent       = data.note;
 
     const map  = el("warehouseMap");
@@ -586,7 +643,8 @@ const Tooltip = {
     const rate   = this._getRate(id);
     const status = statusByRate(rate);
     const labels = { ok: "DISPONÍVEL", warning: "ATENÇÃO", critical: "CRÍTICO" };
-    const avail  = Math.round(data.capacity * (1 - rate / 100));
+    const cap    = data.capacity;
+    const avail  = cap > 0 ? Math.round(cap * (1 - rate / 100)) : 0;
     const period = el("selectedPeriod")?.textContent || "—";
 
     el("modalTitle").textContent = data.name;
@@ -601,8 +659,8 @@ const Tooltip = {
         ${[
           ["Zona",             data.name],
           ["Ocupação atual",   fmt.pct(rate)],
-          ["Capacidade total", fmt.boxes(data.capacity)],
-          ["Disponível",       fmt.boxes(avail)],
+          ["Capacidade total", cap > 0 ? fmt.boxes(cap) : "Não configurado"],
+          ["Disponível",       cap > 0 ? fmt.boxes(avail) : "—"],
         ].map(([k, v]) => `
           <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9">
             <dt style="font-size:.875rem;color:#475569">${k}</dt>
@@ -795,8 +853,8 @@ const Drawer = {
     const bodyEl = el("drawerBody");
     if (!bodyEl) return;
 
-    const zoneRows    = buildRealZoneRows(rows, result);
-    const dot         = s => ({
+    const zoneRows = buildRealZoneRows(rows, result);
+    const dot      = s => ({
       ok:       `<span class="dz-dot dz-dot--ok"></span>`,
       warning:  `<span class="dz-dot dz-dot--warn"></span>`,
       critical: `<span class="dz-dot dz-dot--crit"></span>`,
@@ -962,18 +1020,23 @@ function initDrawer() {
 }
 
 /* =========================================================================
-   ANÁLISE DE CAPACIDADE — CÁLCULO LOCAL
+   ANÁLISE DE CAPACIDADE — CÁLCULO LOCAL (v7.3)
 ========================================================================= */
 function getCAInputs() {
   return {
-    capacity:        Number(el("caLcbCapacity")?.value)       || 140_000,
-    currentOcc:      Number(el("caCurrentOccupation")?.value) || 110_000,
-    periodDays:      Number(el("caAnalysisPeriod")?.value)    || 15,
-    safetyMargin:    Number(el("caSafetyMargin")?.value)      || 0,
-    dailyRate:       7,
-    capBlocado:      Number(el("caCapBlocado")?.value)        || 19_800,
-    capPortaPallets: Number(el("caCapPortaPallets")?.value)   || 68_000,
-    capBlueBox:      Number(el("caCapBlueBox")?.value)        || 16_000,
+    capacity:              Number(el("caLcbCapacity")?.value)            || 140_000,
+    currentOcc:            Number(el("caCurrentOccupation")?.value)      || 110_000,
+    periodDays:            Number(el("caAnalysisPeriod")?.value)         || 15,
+    safetyMargin:          Number(el("caSafetyMargin")?.value)           || 0,
+    dailyRate:             7,
+    capBlocado:            Number(el("caCapBlocado")?.value)             || 19_800,
+    capPortaPalletsB10:    Number(el("caCapPortaPalletsB10")?.value)     || 37_400,
+    capPortaPalletsB20:    Number(el("caCapPortaPalletsB20")?.value)     || 30_600,
+    capBlueBoxB10:         Number(el("caCapBlueBoxB10")?.value)          || 8_000,
+    capBlueBoxB20:         Number(el("caCapBlueBoxB20")?.value)          || 8_000,
+    capBlueBoxIndividual:  Number(el("caCapBlueBoxIndividual")?.value)   || 4_200,
+    capTMX:                Number(el("caCapTMX")?.value)                 || 0,
+    volumeAtual:           Number(el("caVolumeFuturo")?.value)           || 0,
   };
 }
 
@@ -991,15 +1054,23 @@ function calcCA(inputs) {
   return {
     volumePeriod: totalProjection, totalProjection, capacity, currentOcc,
     usableCapacity, projectedOcc, available, occRate, status, periodDays, dailyRate,
-    capBlocado:      inputs.capBlocado,
-    capPortaPallets: inputs.capPortaPallets,
-    capBlueBox:      inputs.capBlueBox,
+    capBlocado:          inputs.capBlocado,
+    capPortaPalletsB10:  inputs.capPortaPalletsB10,
+    capPortaPalletsB20:  inputs.capPortaPalletsB20,
+    capBlueBoxB10:       inputs.capBlueBoxB10,
+    capBlueBoxB20:       inputs.capBlueBoxB20,
+    capBlueBoxIndividual:inputs.capBlueBoxIndividual,
+    capTMX:              inputs.capTMX,
+    // Mantém o nome volumeFuturo internamente para compatibilidade com o restante do código
+    volumeFuturo:        inputs.volumeAtual,
+    volumeAtual:         inputs.volumeAtual,
   };
 }
 
+/* buildMockRows — v7.3: zonas separadas Blue Box B10 / B20 */
 function buildMockRows(result) {
   const periods = ["JAN/2026", "MAR/2026", "MAI/2026", "JUL/2026"];
-  const zones   = ["Base 10", "Base 20", "Blue Box Pallet", "Blocado"];
+  const zones   = ["Base 10", "Base 20", "Blue Box Base 10", "Blue Box Base 20"];
 
   return [
     { pn: "PN-1001", desc: "Peça exemplo A", pe: "EA", dr: result.dailyRate,     volC: result.volumePeriod * 0.22, storage_zone: zones[0], introduction_date: periods[0] },
@@ -1156,7 +1227,7 @@ function renderDonutChart(result) {
 function renderEngine(result) {
   const container = el("caEngineContainer");
   if (!container) return;
-  const cap    = Math.round(result.capacity);
+  const cap     = Math.round(result.capacity);
   const currOcc = Math.round(result.currentOcc);
   const margin  = Math.round(cap * ((Number(el("caSafetyMargin")?.value) || 0) / 100));
   const volPD   = Math.round(result.volumePeriod ?? result.totalProjection ?? 0);
@@ -1225,19 +1296,33 @@ function renderCAVerdict(result) {
   if (ts) ts.innerHTML = `Último cálculo: <strong>${formatTimestamp()}</strong>`;
 }
 
+/* =========================================================================
+   renderCAKpis — v7.3
+========================================================================= */
 function renderCAKpis(result) {
   const grid = el("caKpiGrid");
   if (!grid) return;
 
-  const cap             = result.capacity;
-  const currOcc         = result.currentOcc;
-  const projOcc         = result.projectedOcc ?? result.projected ?? 0;
-  const avail           = result.available ?? 0;
-  const occRate         = result.occRate ?? 0;
-  const status          = result.status ?? statusByRate(occRate);
-  const capBlocado      = result.capBlocado      ?? Number(el("caCapBlocado")?.value)      ?? 19_800;
-  const capPortaPallets = result.capPortaPallets  ?? Number(el("caCapPortaPallets")?.value) ?? 68_000;
-  const capBlueBox      = result.capBlueBox       ?? Number(el("caCapBlueBox")?.value)      ?? 16_000;
+  const cap     = result.capacity;
+  const currOcc = result.currentOcc;
+  const avail   = result.available ?? 0;
+  const occRate = result.occRate ?? 0;
+  const status  = result.status ?? statusByRate(occRate);
+
+  const capBlocado           = result.capBlocado           ?? Number(el("caCapBlocado")?.value)           ?? 19_800;
+  const capPortaPalletsB10   = result.capPortaPalletsB10   ?? Number(el("caCapPortaPalletsB10")?.value)   ?? 37_400;
+  const capPortaPalletsB20   = result.capPortaPalletsB20   ?? Number(el("caCapPortaPalletsB20")?.value)   ?? 30_600;
+  const capBlueBoxB10        = result.capBlueBoxB10        ?? Number(el("caCapBlueBoxB10")?.value)        ?? 8_000;
+  const capBlueBoxB20        = result.capBlueBoxB20        ?? Number(el("caCapBlueBoxB20")?.value)        ?? 8_000;
+  const capBlueBoxIndividual = result.capBlueBoxIndividual ?? Number(el("caCapBlueBoxIndividual")?.value) ?? 4_200;
+  const capTMX               = result.capTMX               ?? Number(el("caCapTMX")?.value)               ?? 0;
+  const volumeAtual          = result.volumeAtual          ?? Number(el("caVolumeFuturo")?.value)         ?? 0;
+
+  // Cálculo da ocupação futura global
+  const volumeFuturo = State.productionVolume || 0;
+  const occFuturaGlobal = (volumeAtual > 0 && occRate > 0)
+    ? Math.min((occRate * (volumeFuturo / volumeAtual)), 200)
+    : null;
 
   const kSC = status === "critical" ? "ca-kpi--crit" :
               status === "warning"  ? "ca-kpi--warn" : "ca-kpi--ok";
@@ -1253,13 +1338,28 @@ function renderCAKpis(result) {
       <span class="ca-kpi__desc">${desc}</span>
     </div>`;
 
+  // KPI de ocupação futura com classe dinâmica
+  const occFuturaStr = occFuturaGlobal !== null
+    ? `${occFuturaGlobal.toFixed(1).replace(".", ",")}%`
+    : "—";
+  const occFuturaStatus = occFuturaGlobal !== null ? statusByRate(occFuturaGlobal) : "ok";
+  const occFuturaClass  = occFuturaGlobal !== null
+    ? (occFuturaStatus === "critical" ? "ca-kpi--crit" : occFuturaStatus === "warning" ? "ca-kpi--warn" : "ca-kpi--ok")
+    : "";
+
   grid.innerHTML =
-    kpi("Capacidade Total",      fmt.int(cap),                  "caixas", "Espaço físico total do LCB",            "boxes") +
-    kpi("Ocupação Atual",        fmt.int(Math.round(currOcc)),  "caixas", "Inventário atual no LCB",               "users") +
-    kpi("Capacidade Disponível", fmt.int(Math.round(avail)),    "caixas", "Folga após introdução do PD",           "check",  kSC) +
-    kpi("Cap. Blocado",          fmt.int(capBlocado),           "caixas", "Capacidade da zona de bloqueio",        "lock",   "ca-kpi--highlight") +
-    kpi("Cap. Porta Pallets",    fmt.int(capPortaPallets),      "caixas", "Capacidade de porta pallets (BASE 10)", "layers", "ca-kpi--highlight") +
-    kpi("Cap. Blue Box",         fmt.int(capBlueBox),           "caixas", "Capacidade Blue Box Pallet",            "cube",   "ca-kpi--highlight");
+    kpi("Capacidade Total",        fmt.int(cap),                        "caixas", "Espaço físico total do LCB",          "boxes") +
+    kpi("Ocupação Atual",          fmt.int(Math.round(currOcc)),        "caixas", "Inventário atual no LCB",             "users") +
+    kpi("Capacidade Disponível",   fmt.int(Math.round(avail)),          "caixas", "Folga após introdução do PD",         "check",   kSC) +
+    kpi("Ocup. Futura Projetada",  occFuturaStr,                        "%",      `Com ${fmt.int(volumeFuturo)} veíc./dia`,  "trending", occFuturaClass) +
+    kpi("Blocado",                 fmt.int(capBlocado),                 "caixas", "Cap. zona de bloqueio",               "lock",    "ca-kpi--highlight") +
+    kpi("Porta Pallets Base 10",   fmt.int(capPortaPalletsB10),         "caixas", "Cap. Base 10",                        "layers",  "ca-kpi--highlight") +
+    kpi("Porta Pallets Base 20",   fmt.int(capPortaPalletsB20),         "caixas", "Cap. Base 20",                        "layers",  "ca-kpi--highlight") +
+    kpi("Blue Box Base 10",        fmt.int(capBlueBoxB10),              "caixas", "Cap. Blue Box pallet base 10",        "cube",    "ca-kpi--highlight") +
+    kpi("Blue Box Base 20",        fmt.int(capBlueBoxB20),              "caixas", "Cap. Blue Box pallet base 20",        "cube",    "ca-kpi--highlight") +
+    kpi("Blue Box Individual",     fmt.int(capBlueBoxIndividual),       "caixas", "Cap. Blue Box individual",            "cube",    "ca-kpi--highlight") +
+    kpi("T;M;4;0;X;90",           fmt.int(capTMX),                     "caixas", "Cap. zona T;M;4;0;X;90",             "layers",  "ca-kpi--highlight") +
+    kpi("Volume Produto Atual",    fmt.int(volumeAtual),                "caixas", "Volume de produto informado",         "boxes",   "ca-kpi--highlight");
 }
 
 function renderCARecommendation(result) {
@@ -1309,41 +1409,47 @@ function handleCalcClick() {
 
       State.lastRows = rawItems.map((item) => ({
         ...item,
-        pn:                item.part_number      ?? item.pn    ?? "",
-        desc:              item.descricao        ?? item.desc  ?? "",
-        pe:                item.pckg_type        ?? item.pe    ?? "",
-        dr:                item.daily_rate       ?? item.dr    ?? 0,
-        volC:              item.volume_contratado ?? item.volC ?? 0,
-        cxs_periodo:       item.cxs_periodo      ?? null,
+        pn:                item.part_number       ?? item.pn    ?? "",
+        desc:              item.descricao         ?? item.desc  ?? "",
+        pe:                item.pckg_type         ?? item.pe    ?? "",
+        dr:                item.daily_rate        ?? item.dr    ?? 0,
+        volC:              item.volume_contratado ?? item.volC  ?? 0,
+        cxs_periodo:       item.cxs_periodo       ?? null,
         calc:              item.volume_calculado_periodo ?? item.cxs_periodo ?? 0,
-        storage_zone:      item.storage_zone     ?? item.storageZone ?? item.zona ?? "",
+        storage_zone:      item.storage_zone      ?? item.storageZone ?? item.zona ?? "",
         introduction_date: item.introduction_date ?? item.introductionDate ?? "",
-        bloqueado:         item.bloqueado        ?? 0,
-        origem:            item.origem           ?? "",
-        calculo_fonte:     item.calculo_fonte    ?? "",
-        valor_total:       item.valor_total      ?? 0,
+        bloqueado:         item.bloqueado         ?? 0,
+        origem:            item.origem            ?? "",
+        calculo_fonte:     item.calculo_fonte     ?? "",
+        valor_total:       item.valor_total       ?? 0,
       }));
 
       State.selectedProjectName = simulation.projeto || State.selectedProjectName;
 
       const inputs = getCAInputs();
       const resultForRender = {
-        status:          calcResult.status,
-        occRate:         calcResult.occRate,
-        volumePeriod:    calcResult.volumePeriod,
-        capacity:        calcResult.capacity,
-        currentOcc:      calcResult.currentOcc,
-        usableCapacity:  calcResult.usable,
-        projectedOcc:    calcResult.projected,
-        available:       calcResult.available,
-        increaseNeeded:  calcResult.increaseNeeded,
-        totalProjection: calcResult.volumePeriod,
-        projectName:     simulation.projeto || "",
-        porZona:         simulation.por_zona || {},
-        zones:           Array.isArray(simulation.zones) ? simulation.zones : [],
-        capBlocado:      inputs.capBlocado,
-        capPortaPallets: inputs.capPortaPallets,
-        capBlueBox:      inputs.capBlueBox,
+        status:              calcResult.status,
+        occRate:             calcResult.occRate,
+        volumePeriod:        calcResult.volumePeriod,
+        capacity:            calcResult.capacity,
+        currentOcc:          calcResult.currentOcc,
+        usableCapacity:      calcResult.usable,
+        projectedOcc:        calcResult.projected,
+        available:           calcResult.available,
+        increaseNeeded:      calcResult.increaseNeeded,
+        totalProjection:     calcResult.volumePeriod,
+        projectName:         simulation.projeto || "",
+        porZona:             simulation.por_zona || {},
+        zones:               Array.isArray(simulation.zones) ? simulation.zones : [],
+        capBlocado:          inputs.capBlocado,
+        capPortaPalletsB10:  inputs.capPortaPalletsB10,
+        capPortaPalletsB20:  inputs.capPortaPalletsB20,
+        capBlueBoxB10:       inputs.capBlueBoxB10,
+        capBlueBoxB20:       inputs.capBlueBoxB20,
+        capBlueBoxIndividual:inputs.capBlueBoxIndividual,
+        capTMX:              inputs.capTMX,
+        volumeFuturo:        inputs.volumeAtual,
+        volumeAtual:         inputs.volumeAtual,
       };
 
       renderAll(resultForRender);
@@ -1376,7 +1482,7 @@ function runLocalCACalculation() {
 }
 
 /* =========================================================================
-   EVENTOS DE ANÁLISE
+   EVENTOS DE ANÁLISE (v7.3)
 ========================================================================= */
 function initAnalise() {
   if (!_calcListenerAttached) {
@@ -1386,24 +1492,40 @@ function initAnalise() {
 
   el("btnUseMock")?.addEventListener("click", () => {
     const defaults = {
-      caLcbCapacity:       140_000,
-      caCurrentOccupation: 110_000,
-      caAnalysisPeriod:    15,
-      caSafetyMargin:      10,
-      caCapBlocado:        19_800,
-      caCapPortaPallets:   68_000,
-      caCapBlueBox:        16_000,
+      caLcbCapacity:           140_000,
+      caCurrentOccupation:     110_000,
+      caAnalysisPeriod:        15,
+      caSafetyMargin:          10,
+      caCapBlocado:            19_800,
+      caCapPortaPalletsB10:    37_400,
+      caCapPortaPalletsB20:    30_600,
+      caCapBlueBoxB10:         8_000,
+      caCapBlueBoxB20:         8_000,
+      caCapBlueBoxIndividual:  4_200,
+      caCapTMX:                0,
+      caVolumeFuturo:          0,
     };
     Object.entries(defaults).forEach(([id, v]) => {
       const e = el(id);
       if (e) e.value = v;
     });
+    syncZoneCapacitiesFromInputs();
     runLocalCACalculation();
   });
 
-  ["caLcbCapacity","caCurrentOccupation","caAnalysisPeriod","caSafetyMargin",
-   "caCapBlocado","caCapPortaPallets","caCapBlueBox"].forEach(id => {
+  [
+    "caLcbCapacity", "caCurrentOccupation", "caAnalysisPeriod", "caSafetyMargin",
+    "caCapBlocado",
+    "caCapPortaPalletsB10", "caCapPortaPalletsB20",
+    "caCapBlueBoxB10",      "caCapBlueBoxB20",
+    "caCapBlueBoxIndividual",
+    "caCapTMX",
+    "caVolumeFuturo",
+  ].forEach(id => {
     el(id)?.addEventListener("input", () => {
+      syncZoneCapacitiesFromInputs();
+      // Sempre que mudar volume atual ou ocupação, atualiza contexto do overlay
+      _syncFutureVolumeContext();
       if (el("caResultCards")?.style.display !== "none") handleCalcClick();
     });
   });
@@ -1458,6 +1580,8 @@ function init() {
     initAnalise();
     initMapControls();
 
+    syncZoneCapacitiesFromInputs();
+
     const defaultRates = {};
     Object.entries(ZONE_DATA).forEach(([id, z]) => { defaultRates[id] = z.baseOcc; });
     updateWarehouseTriggerBadges(defaultRates);
@@ -1473,7 +1597,7 @@ function init() {
     });
 
     showPage("analise");
-    console.info("[LCB] v2 — overlay vinculado a dados reais, popup fix aplicado");
+    console.info("[LCB] v7.4 — Ocupação futura por zona integrada");
   } catch (err) {
     console.error("[LCB] Erro na inicialização:", err);
   }
