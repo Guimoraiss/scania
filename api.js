@@ -14,7 +14,9 @@
    CONFIGURAÇÃO
 ========================================================================= */
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+// Em produção, config.js define a URL pública do serviço Render. Mantém o
+// endereço local como alternativa para executar o projeto no computador.
+const API_BASE_URL = window.LCB_API_BASE_URL || "http://127.0.0.1:8000";
 const ENDPOINTS = {
   upload:       `${API_BASE_URL}/excel/upload`,
   simulate:     `${API_BASE_URL}/excel/simulate`,
