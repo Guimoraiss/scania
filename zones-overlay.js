@@ -278,26 +278,27 @@ function aggregateByZone(items, opts = {}) {
     const blocked  = Math.max(0, _blk(it));
     const dr       = _dr(it);
 
+    // Filtro da timeline:
+    // - selKey null → mostra tudo
+    // - introKey null → item sem data → sempre inclui
+    // - introKey <= selKey → introduzido até o período selecionado
+    const visibleInTimeline = selKey === null || introKey === null || introKey <= selKey;
+
+    if (!visibleInTimeline) continue; // ← pula o item inteiro se fora do período
+
     if (pn) g.pns.add(pn);
     g.count   += 1;
     g.blocked += blocked;
     g.dr      += dr;
+    g.introVolume += vol;
 
-    // Visível na timeline:
-    // - selKey null → mostra tudo (sem filtro de período)
-    // - introKey null → item sem data de introdução → sempre inclui
-    // - introKey <= selKey → introduzido até o período selecionado
-    const visibleInTimeline = selKey === null || introKey === null || introKey <= selKey;
-    if (visibleInTimeline) {
-      g.introVolume += vol;
-      if (g.details.length < 100 && pn) {
-        g.details.push({
-          pn, desc: _desc(it), pe: _pe(it), zone: z,
-          volExcel: _num(it, ["cxs_periodo","volC"]),
-          volCalc:  _num(it, ["volume_calculado_periodo","calc","cxs_periodo"]),
-          intro: _intro(it), introKey,
-        });
-      }
+    if (g.details.length < 100 && pn) {
+      g.details.push({
+        pn, desc: _desc(it), pe: _pe(it), zone: z,
+        volExcel: _num(it, ["cxs_periodo","volC"]),
+        volCalc:  _num(it, ["volume_calculado_periodo","calc","cxs_periodo"]),
+        intro: _intro(it), introKey,
+      });
     }
   }
 
@@ -314,8 +315,20 @@ function aggregateByZone(items, opts = {}) {
     const futPct   = future?.futurePct ?? null;
     const projOcc  = Math.round(future?.projectedOccupied ?? curOcc);
     const baseProj = Math.round(future?.baseProjected ?? curOcc);
-    const avail    = cap > 0 ? Math.max(0, cap - projOcc - blocked) : null;
-    const sev      = _sev(futPct ?? occPct);
+
+    // Disponível = Capacidade − Ocupado Hoje − Introduções PD − Bloqueado
+    // As introduções do PD sempre são subtraídas, com ou sem projeção futura.
+    // Se há projeção futura, projOcc já inclui introVolume (via _calcOcupacaoFutura),
+    // então usamos projOcc. Se não há, somamos curOcc + introVolume manualmente.
+    const occupiedTotal = future !== null
+      ? projOcc + blocked                          // projeção futura ativa: projOcc já inclui intro
+      : curOcc + introVolume + blocked;            // sem projeção: soma manualmente
+    const avail = cap > 0 ? Math.max(0, cap - occupiedTotal) : null;
+
+    // % de ocupação da aba "Situação Atual" considera ocupação hoje + PD introduzido
+    const occWithPD    = curOcc + introVolume;
+    const occWithPDPct = cap > 0 ? (occWithPD / cap) * 100 : occPct;
+    const sev = _sev(futPct ?? occWithPDPct ?? occPct);
 
     const sortedDetails = g.details.slice().sort((a, b) => {
       if (a.introKey == null && b.introKey == null) return 0;
@@ -327,7 +340,10 @@ function aggregateByZone(items, opts = {}) {
     result[zoneName] = {
       name: zoneName, abbr: OVERLAY_ZONES[zoneName].abbr,
       curOcc, baseProjected: baseProj, projOcc, blocked, avail, cap,
-      occPct, futPct, fator: future?.fator ?? null, volIntro: introVolume,
+      occPct,                    // % só ocupação hoje (sem PD)
+      occWithPDPct,              // % ocupação hoje + PD introduzido
+      occWithPD,                 // cx ocupação hoje + PD
+      futPct, fator: future?.fator ?? null, volIntro: introVolume,
       count: g.count, pnCount: g.pns.size, details: sortedDetails,
       hasCap: cap > 0, sev,
       avgDr: g.count > 0 ? (g.dr / g.count).toFixed(2) : "0,00",
@@ -411,11 +427,12 @@ function _occBar(pct, color, showThresholds) {
 
 /* -- ABA SITUAÇÃO ATUAL -- */
 function _buildTabAtual(m) {
-  const sevCur = _sev(m.occPct);
-  const curClr = _sevColor(sevCur);
-  const cap    = m.cap ?? 0;
-  const avail  = m.avail ?? 0;
-  const occPct = m.occPct ?? 0;
+  const sevCur   = _sev(m.occWithPDPct ?? m.occPct);
+  const curClr   = _sevColor(sevCur);
+  const cap      = m.cap ?? 0;
+  const avail    = m.avail ?? 0;
+  const occPct   = m.occPct ?? 0;                          // só hoje
+  const occWPct  = m.occWithPDPct ?? occPct;               // hoje + PD
   const availPct = cap > 0 ? Math.max(0, (avail / cap) * 100) : 0;
 
   return `
@@ -431,7 +448,8 @@ function _buildTabAtual(m) {
           <span class="zo-section__label">Nível de Ocupação</span>
           <span class="zo-section__badge" style="background:${_sevBg(sevCur)};color:${curClr};border-color:${_sevBorder(sevCur)}">${_sevLabel(sevCur)}</span>
         </div>
-        ${_occBar(occPct, curClr, true)}
+        <!-- Barra: hoje + PD introduzido -->
+        ${_occBar(occWPct, curClr, true)}
         <div class="zo-occ-sub-row">
           <span class="zo-occ-sub-lbl">Bloqueado</span>
           <div class="zo-occ-sub-bar">
@@ -447,9 +465,14 @@ function _buildTabAtual(m) {
           <span class="zo-detail-item__val">${_fmtMaybe(cap)}</span>
         </div>
         <div class="zo-detail-item">
-          <span class="zo-detail-item__lbl">Ocupado</span>
+          <span class="zo-detail-item__lbl">Ocupado Hoje</span>
           <span class="zo-detail-item__val" style="color:${curClr}">${_fmtCx(m.curOcc)}</span>
         </div>
+        ${m.volIntro > 0 ? `
+        <div class="zo-detail-item">
+          <span class="zo-detail-item__lbl">+ PD Introduzido</span>
+          <span class="zo-detail-item__val" style="color:#d97706">${_fmtCx(m.volIntro)}</span>
+        </div>` : ""}
         <div class="zo-detail-item">
           <span class="zo-detail-item__lbl">Bloqueado</span>
           <span class="zo-detail-item__val">${_fmtCx(m.blocked)}</span>
@@ -606,7 +629,7 @@ function _buildPopupHtml(zoneName, m) {
       </div>
       <div class="zo-hd__right">
         <div class="zo-hd__pills">
-          ${m.occPct != null ? `<span class="zo-hd__pill">Hoje ${m.occPct.toFixed(0)}%</span>` : ""}
+          ${m.occWithPDPct != null ? `<span class="zo-hd__pill">Hoje ${m.occWithPDPct.toFixed(0)}%</span>` : ""}
           ${m.futPct != null ? `<span class="zo-hd__pill zo-hd__pill--fut">Futuro ${m.futPct.toFixed(0)}%</span>` : ""}
         </div>
         <span class="zo-hd__status-pill">${_sevLabel(mainSev)}</span>
@@ -624,7 +647,7 @@ function _buildPopupHtml(zoneName, m) {
       <button class="zo-tab zo-tab--active" role="tab" data-tab="atual" aria-selected="true">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Situação Atual
-        ${m.occPct != null ? `<span class="zo-tab__badge" style="background:${_sevBg(sevCur)};color:${curClr};border-color:${_sevBorder(sevCur)}">${m.occPct.toFixed(0)}%</span>` : ""}
+        ${m.occWithPDPct != null ? `<span class="zo-tab__badge" style="background:${_sevBg(sevCur)};color:${curClr};border-color:${_sevBorder(sevCur)}">${m.occWithPDPct.toFixed(0)}%</span>` : ""}
       </button>
       <button class="zo-tab" role="tab" data-tab="proj" aria-selected="false">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -715,14 +738,15 @@ function _createHotspot(zoneName, cfg, hotspotCfg, m, map) {
   const sevCls = m.sev === "none" ? "low" : m.sev;
   const clr    = _sevColor(m.sev);
 
-  // Mostra % futura se disponível, % atual caso contrário
-  const mainPct  = m.futPct !== null ? m.futPct : m.occPct;
-  const mainLbl  = mainPct != null ? `${mainPct.toFixed(0)}%` : "—";
-  const isFuture = m.futPct !== null;
+  // Mostra % futura se disponível; senão, hoje + PD introduzido (mais preciso que só hoje)
+  const baseOccPct = m.occWithPDPct ?? m.occPct;
+  const mainPct    = m.futPct !== null ? m.futPct : baseOccPct;
+  const mainLbl    = mainPct != null ? `${mainPct.toFixed(0)}%` : "—";
+  const isFuture   = m.futPct !== null;
 
   let trendIcon = "";
-  if (isFuture && m.occPct != null) {
-    const delta = m.futPct - m.occPct;
+  if (isFuture && baseOccPct != null) {
+    const delta = m.futPct - baseOccPct;
     if (delta > 0.5)       trendIcon = `<span class="zo-hs__trend zo-hs__trend--up">↑</span>`;
     else if (delta < -0.5) trendIcon = `<span class="zo-hs__trend zo-hs__trend--dn">↓</span>`;
     else                   trendIcon = `<span class="zo-hs__trend zo-hs__trend--eq">→</span>`;

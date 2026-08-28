@@ -1691,23 +1691,23 @@ function initAnalise() {
   el("btnUseMock")?.addEventListener("click", () => {
     // Valores padrão para Capacidade LCB
     const capDefaults = {
-      caLcbCapPortaPalletsB10:   68_000,
-      caLcbCapPortaPalletsB20:   55_200,
-      caLcbCapBlueBoxB10:        8_000,
-      caLcbCapBlueBoxB20:        8_000,
-      caLcbCapBlueBoxIndividual: 4_200,
-      caLcbCapBlocado:           19_800,
-      caLcbCapTMX:               8_000,
+      caLcbCapPortaPalletsB10:   35766,
+      caLcbCapPortaPalletsB20:   19193,
+      caLcbCapBlueBoxB10:        0,
+      caLcbCapBlueBoxB20:        0,
+      caLcbCapBlueBoxIndividual: 0,
+      caLcbCapBlocado:           0,
+      caLcbCapTMX:               0,
       caSafetyMargin:            10,
     };
     // Valores padrão para Ocupadas por Tipo
     const occDefaults = {
-      caCapPortaPalletsB10:   37_400,
-      caCapPortaPalletsB20:   30_600,
-      caCapBlueBoxB10:        8_000,
-      caCapBlueBoxB20:        8_000,
-      caCapBlueBoxIndividual: 4_200,
-      caCapBlocado:           19_800,
+      caCapPortaPalletsB10:   24671,
+      caCapPortaPalletsB20:   13851,
+      caCapBlueBoxB10:        0,
+      caCapBlueBoxB20:        0,
+      caCapBlueBoxIndividual: 0,
+      caCapBlocado:           0,
       caCapTMX:               0,
       caVolumeFuturo:         0,
     };
