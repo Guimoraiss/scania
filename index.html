@@ -8,13 +8,9 @@
 </head>
 <body>
 
-<!-- OVERLAY mobile sidebar -->
 <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
-
-<!-- DRAWER OVERLAY -->
 <div class="drawer-overlay" id="drawerOverlay" aria-hidden="true"></div>
 
-<!-- DRAWER DE DETALHES -->
 <aside class="details-drawer" id="detailsDrawer" aria-label="Detalhes da análise" aria-hidden="true">
   <div class="drawer-header">
     <div class="drawer-header__left">
@@ -36,10 +32,8 @@
   </div>
 </aside>
 
-<!-- APP SHELL -->
 <div class="app-shell" id="app">
 
-  <!-- HEADER -->
   <header class="app-header" role="banner">
     <button class="menu-toggle" id="menuToggle" type="button"
       aria-label="Alternar menu lateral" aria-expanded="true" aria-controls="sidebar">
@@ -59,7 +53,6 @@
     </div>
   </header>
 
-  <!-- SIDEBAR -->
   <nav class="app-sidebar" id="sidebar" aria-label="Navegação principal">
     <div class="sidebar-inner">
       <p class="sidebar-section-label">Principal</p>
@@ -81,15 +74,14 @@
         <div class="sidebar-footer-info__dot"></div>
         <span>LCB · Logistics Center Brazil</span>
       </div>
+      <div class="sidebar-footer-credit">
+        Desenvolvido por <strong>Gustavo Sigoli</strong>
+      </div>
     </div>
   </nav>
 
-  <!-- MAIN -->
   <main class="app-main" id="mainContent">
 
-    <!-- ================================================================
-         SCREEN: ANÁLISE DE CAPACIDADE
-    ================================================================ -->
     <section id="screen-analise" class="screen screen--active" aria-label="Análise de Capacidade">
 
       <div class="page-header">
@@ -103,24 +95,13 @@
         </div>
       </div>
 
-      <!-- Grid principal -->
       <div class="ca-layout">
 
-        <!-- Coluna esquerda: parâmetros -->
+        <!-- ── COLUNA ESQUERDA: parâmetros ── -->
         <div class="ca-layout__inputs">
           <div class="panel">
             <h3 class="panel-title">Parâmetros da Análise</h3>
             <div class="ca-form">
-
-              <!-- Seleção de projetos -->
-              <div class="ca-field">
-                <label class="ca-label" for="caProjectFilter">Projeto Analisado</label>
-                <div class="ca-project-filter" id="caProjectFilter" role="group" aria-label="Selecionar projeto(s)"></div>
-                <p class="ca-field__hint">
-                  Selecione um ou mais projetos para filtrar os indicadores, gráficos e mapa.
-                  Após o upload do Excel os projetos reais substituem os chips acima.
-                </p>
-              </div>
 
               <div class="ca-divider"><span>Arquivo de PD</span></div>
 
@@ -135,83 +116,116 @@
                 <p class="ca-field__hint">Colunas esperadas: PN · Descrição · PE · Qtde PNs/Caixa · Daily Rate · Volume Contratado · storage_zone</p>
               </div>
 
-              <div class="ca-divider"><span>Parâmetros do LCB</span></div>
+              <!-- ── CAPACIDADE LCB ── -->
+              <div class="ca-divider"><span>Capacidade LCB</span></div>
 
-              <!-- Linha 1: Capacidade Total + Ocupação Atual -->
-              <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapacity">Capacidade Total (caixas)</label>
-                  <input type="number" id="caLcbCapacity" class="ca-input" value="140000" min="1">
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caCurrentOccupation">Ocupação Atual (caixas)</label>
-                  <input type="number" id="caCurrentOccupation" class="ca-input" value="110000" min="0">
-                </div>
-              </div>
-
-              <!-- Linha 2: Período + Margem de Segurança -->
-              <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caAnalysisPeriod">Período de Análise (dias)</label>
-                  <input type="number" id="caAnalysisPeriod" class="ca-input" value="15" min="1" max="365">
-                </div>
+              <!-- Margem de Segurança -->
+              <div class="ca-row ca-row--single">
                 <div class="ca-field">
                   <label class="ca-label" for="caSafetyMargin">Margem de Segurança (%)</label>
                   <input type="number" id="caSafetyMargin" class="ca-input" value="10" min="0" max="50">
                 </div>
               </div>
 
-              <!-- ── OCUPADAS POR TIPO ─────────────────────────────── -->
-              <div class="ca-divider"><span>Ocupadas por Tipo</span></div>
-
               <!-- Linha 1 -->
               <div class="ca-row">
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapPortaPalletsB10">Porta Pallets Base 10 </label>
-                  <input type="number" id="caCapPortaPalletsB10" class="ca-input" value="37400" min="0">
+                  <label class="ca-label" for="caLcbCapPortaPalletsB10">Porta Pallets Base 10</label>
+                  <input type="number" id="caLcbCapPortaPalletsB10" class="ca-input" value="68000" min="0">
                 </div>
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapPortaPalletsB20">Porta Pallets Base 20 </label>
-                  <input type="number" id="caCapPortaPalletsB20" class="ca-input" value="30600" min="0">
+                  <label class="ca-label" for="caLcbCapPortaPalletsB20">Porta Pallets Base 20</label>
+                  <input type="number" id="caLcbCapPortaPalletsB20" class="ca-input" value="55200" min="0">
                 </div>
               </div>
 
               <!-- Linha 2 -->
               <div class="ca-row">
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapBlueBoxB10">Blue Box Base 10 </label>
-                  <input type="number" id="caCapBlueBoxB10" class="ca-input" value="8000" min="0">
+                  <label class="ca-label" for="caLcbCapBlueBoxB10">Blue Box Base 10</label>
+                  <input type="number" id="caLcbCapBlueBoxB10" class="ca-input" value="8000" min="0">
                 </div>
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapBlueBoxB20">Blue Box Base 20 </label>
-                  <input type="number" id="caCapBlueBoxB20" class="ca-input" value="8000" min="0">
+                  <label class="ca-label" for="caLcbCapBlueBoxB20">Blue Box Base 20</label>
+                  <input type="number" id="caLcbCapBlueBoxB20" class="ca-input" value="8000" min="0">
                 </div>
               </div>
 
               <!-- Linha 3 -->
               <div class="ca-row">
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapBlueBoxIndividual">Blue Box Individual </label>
-                  <input type="number" id="caCapBlueBoxIndividual" class="ca-input" value="4200" min="0">
+                  <label class="ca-label" for="caLcbCapBlueBoxIndividual">Blue Box Individual</label>
+                  <input type="number" id="caLcbCapBlueBoxIndividual" class="ca-input" value="4200" min="0">
                 </div>
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapBlocado">Cap. Blocado </label>
-                  <input type="number" id="caCapBlocado" class="ca-input" value="19800" min="0">
+                  <label class="ca-label" for="caLcbCapBlocado">Blocado</label>
+                  <input type="number" id="caLcbCapBlocado" class="ca-input" value="19800" min="0">
                 </div>
               </div>
 
-              <!-- Linha 4 -->
-              <div class="ca-row">
+              <!-- Linha 4: TMX sozinho (Volume Produto removido daqui) -->
+              <div class="ca-row ca-row--single">
                 <div class="ca-field">
-                  <label class="ca-label" for="caCapTMX">T;M;4;0;X;90 </label>
-                  <input type="number" id="caCapTMX" class="ca-input" value="0" min="0">
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caVolumeFuturo">Volume de Produto (atual) </label>
-                  <input type="number" id="caVolumeFuturo" class="ca-input" value="0" min="0">
+                  <label class="ca-label" for="caLcbCapTMX">T;M;4;0;X;90</label>
+                  <input type="number" id="caLcbCapTMX" class="ca-input" value="8000" min="0">
                 </div>
               </div>
-              <!-- ── /OCUPADAS POR TIPO ────────────────────────────── -->
+              <!-- /CAPACIDADE LCB -->
+
+              <!-- ── OCUPADAS POR TIPO ── -->
+              <div class="ca-divider"><span>Ocupadas por Tipo</span></div>
+
+              <!-- Linha 1 -->
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapPortaPalletsB10">Porta Pallets Base 10</label>
+                  <input type="number" id="caCapPortaPalletsB10" class="ca-input" value="37400" min="0">
+                  <span class="ca-field__disp" id="dispPortaPalletsB10">Disponível: —</span>
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapPortaPalletsB20">Porta Pallets Base 20</label>
+                  <input type="number" id="caCapPortaPalletsB20" class="ca-input" value="30600" min="0">
+                  <span class="ca-field__disp" id="dispPortaPalletsB20">Disponível: —</span>
+                </div>
+              </div>
+
+              <!-- Linha 2 -->
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlueBoxB10">Blue Box Base 10</label>
+                  <input type="number" id="caCapBlueBoxB10" class="ca-input" value="8000" min="0">
+                  <span class="ca-field__disp" id="dispBlueBoxB10">Disponível: —</span>
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlueBoxB20">Blue Box Base 20</label>
+                  <input type="number" id="caCapBlueBoxB20" class="ca-input" value="8000" min="0">
+                  <span class="ca-field__disp" id="dispBlueBoxB20">Disponível: —</span>
+                </div>
+              </div>
+
+              <!-- Linha 3 -->
+              <div class="ca-row">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlueBoxIndividual">Blue Box Individual</label>
+                  <input type="number" id="caCapBlueBoxIndividual" class="ca-input" value="4200" min="0">
+                  <span class="ca-field__disp" id="dispBlueBoxIndividual">Disponível: —</span>
+                </div>
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapBlocado">Blocado</label>
+                  <input type="number" id="caCapBlocado" class="ca-input" value="19800" min="0">
+                  <span class="ca-field__disp" id="dispBlocado">Disponível: —</span>
+                </div>
+              </div>
+
+              <!-- Linha 4: TMX sozinho (Volume Produto removido daqui) -->
+              <div class="ca-row ca-row--single">
+                <div class="ca-field">
+                  <label class="ca-label" for="caCapTMX">T;M;4;0;X;90</label>
+                  <input type="number" id="caCapTMX" class="ca-input" value="0" min="0">
+                  <span class="ca-field__disp" id="dispTMX">Disponível: —</span>
+                </div>
+              </div>
+              <!-- /OCUPADAS POR TIPO -->
 
               <button class="ca-btn-calc" id="btnCalcAnalise" type="button">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -222,10 +236,9 @@
           </div>
         </div>
 
-        <!-- Coluna direita: resultados -->
+        <!-- ── COLUNA DIREITA: resultados ── -->
         <div class="ca-layout__results" aria-live="polite">
 
-          <!-- Placeholder -->
           <div class="panel ca-result-placeholder" id="caResultPlaceholder">
             <div class="ca-placeholder-icon">📊</div>
             <p class="ca-placeholder-title">Nenhuma análise realizada</p>
@@ -234,10 +247,8 @@
             <button class="ca-btn-mock" id="btnUseMock" type="button">Usar Dados de Exemplo</button>
           </div>
 
-          <!-- Resultados reais -->
           <div id="caResultCards" class="ca-result-cards" style="display:none">
 
-            <!-- Veredicto -->
             <div class="ca-verdict" id="caVerdict">
               <div class="ca-verdict__icon" id="caVerdictIcon">✓</div>
               <div class="ca-verdict__text">
@@ -250,16 +261,14 @@
               </button>
             </div>
 
-            <!-- Motor de Cálculo -->
             <div class="panel ca-engine-panel">
               <h3 class="panel-title">Cálculo da Capacidade Disponível (caixas)</h3>
               <div id="caEngineContainer"></div>
             </div>
 
-            <!-- Donut + Mapa lado a lado -->
             <div class="ca-main-content-row">
 
-              <!-- COLUNA ESQUERDA: Donut -->
+              <!-- Donut -->
               <div class="panel ca-composition-panel">
                 <h3 class="panel-title">Composição da Ocupação</h3>
                 <div class="ca-donut-container">
@@ -272,14 +281,17 @@
                 <ul class="ca-donut-legend" id="caDonutLegendList" role="list"></ul>
               </div>
 
-              <!-- COLUNA DIREITA: Mapa do LCB -->
+              <!-- Mapa -->
               <div class="panel ca-map-panel">
                 <div class="ca-map-panel__header">
                   <h3 class="panel-title">Layout Digital do LCB</h3>
                   <span class="panel-badge">Digital Twin 2D</span>
                 </div>
 
-                <!-- Controles inline do mapa -->
+                <!-- ── CONTROLES DO MAPA ──
+                     Vol. Atual (caVolumeFuturo) fica aqui, ao lado do Vol. Futuro.
+                     caLcbVolumeFuturo foi REMOVIDO da seção Capacidade LCB.
+                -->
                 <div class="ca-map-controls">
                   <div class="ca-map-control-item">
                     <span class="ca-map-control-label">Timeline</span>
@@ -294,28 +306,34 @@
                       <strong class="timeline-selected-badge" id="selectedPeriod">JAN/2026</strong>
                     </div>
                   </div>
+
+                  <!-- Vol. Atual + Vol. Futuro lado a lado -->
                   <div class="ca-map-control-item ca-map-control-item--right">
-                    <span class="ca-map-control-label">Volume Produção Futura </span>
+                    <span class="ca-map-control-label">Vol. Atual</span>
                     <div class="ca-map-production">
-                      <input type="number" id="productionVolume" class="ca-map-production-input"
-                             value="75" min="0" max="999" aria-label="Volume de produção">
-                      <span class="ca-map-production-unit">veículos/dia</span>
+                      <input type="number" id="caVolumeFuturo"
+                             class="ca-map-production-input ca-map-production-input--atual ca-map-production-input--bold"
+                             value="0" min="0" max="9999" aria-label="Volume de produto atual (veíc./dia)">
+                    </div>
+                    <span class="ca-map-vol-sep" aria-hidden="true">→</span>
+                    <span class="ca-map-control-label">Vol. Futuro</span>
+                    <div class="ca-map-production">
+                      <input type="number" id="productionVolume"
+                             class="ca-map-production-input"
+                             value="75" min="0" max="999" aria-label="Volume de produção futura (veíc./dia)">
+                      <span class="ca-map-production-unit">veíc./dia</span>
                     </div>
                   </div>
                 </div>
 
-                <!-- Mapa -->
                 <div class="warehouse-map" id="warehouseMap"
                      role="img" aria-label="Mapa interativo do armazém LCB com zonas de armazenagem">
-
                   <img
                     src="Images/Layout LCB 4K.png"
                     alt="Layout LCB 4K — Scania"
                     class="lcb-floor-plan"
                     draggable="false"
                   />
-
-                  <!-- TOOLTIP -->
                   <div class="zone-tooltip" id="zoneTooltip" aria-hidden="true">
                     <div class="tooltip-header">
                       <span class="tooltip-name" id="tooltipName">—</span>
@@ -329,9 +347,7 @@
                     </div>
                   </div>
                 </div>
-                <!-- /warehouse-map -->
 
-                <!-- Rodapé do mapa -->
                 <div class="ca-map-footer">
                   <div class="ca-map-footer__left">
                     <span class="ca-map-footer__label">Cálculo da Capacidade</span>
@@ -342,7 +358,6 @@
                   </div>
                 </div>
 
-                <!-- Legenda das zonas -->
                 <div class="lcb-zone-legend">
                   <span class="lzl-item"><span class="lzl-dot" style="background:#7c3aed"></span>BASE 10</span>
                   <span class="lzl-item"><span class="lzl-dot" style="background:#6d28d9"></span>BASE 20</span>
@@ -351,26 +366,18 @@
                 </div>
                 <p class="panel-hint">* Clique em uma área para visualizar detalhes da zona</p>
               </div>
-              <!-- /ca-map-panel -->
 
             </div>
-            <!-- /ca-main-content-row -->
-
           </div>
-          <!-- /caResultCards -->
 
         </div>
-        <!-- /ca-layout__results -->
-
       </div>
-      <!-- /ca-layout -->
 
-    </section><!-- /screen-analise -->
+    </section>
 
   </main>
-</div><!-- /app-shell -->
+</div>
 
-<!-- Modal de zona -->
 <dialog class="zone-modal" id="zoneModal" aria-labelledby="modalTitle">
   <header class="modal-header">
     <h2 id="modalTitle" class="modal-title">Detalhes da Área</h2>
@@ -380,7 +387,6 @@
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
-<script src="config.js" defer></script>
 <script src="api.js" defer></script>
 <script src="zones-overlay.js" defer></script>
 <script src="app.js" defer></script>

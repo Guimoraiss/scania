@@ -26,20 +26,20 @@ const STATUS_THRESHOLD = { WARNING: 80, CRITICAL: 90 };
 const LOCALE = "pt-BR";
 
 /* =========================================================================
-   ZONE_DATA — zonas reais do LCB (v7.3: bbpallet → bbpalletb10 + bbpalletb20)
+   ZONE_DATA — zonas reais do LCB
 ========================================================================= */
 const ZONE_DATA = {
   base10: {
     name:     "BASE 10",
     baseOcc:  82,
-    capacity: 37_400,
+    capacity: 68_000,
     note:     "Armazenamento em pallet racks verticais — setor superior (BASE 10).",
     color:    "#4c1d95",
   },
   base20: {
     name:     "BASE 20",
     baseOcc:  79,
-    capacity: 30_600,
+    capacity: 55_200,
     note:     "Armazenamento em pallet racks verticais — setor inferior (BASE 20).",
     color:    "#5b21b6",
   },
@@ -88,7 +88,7 @@ const ZONE_DATA = {
   tmx: {
     name:     "T;M;4;0;X;90",
     baseOcc:  30,
-    capacity: 0,
+    capacity: 8_000,
     note:     "Zona de armazenagem T;M;4;0;X;90.",
     color:    "#b45309",
   },
@@ -199,38 +199,174 @@ function formatTimestamp() {
 }
 
 /* =========================================================================
-   SINCRONIZA ZONE_DATA COM OS CAMPOS DE CAPACIDADE DIGITADOS (v7.3)
+   LEITURA DAS CAPACIDADES POR ZONA (seção "Capacidade LCB")
+   Retorna a capacidade física de cada zona a partir dos inputs novos.
 ========================================================================= */
-function syncZoneCapacitiesFromInputs() {
-  const capBlocado           = Number(el("caCapBlocado")?.value)           || 0;
-  const capPortaPalletsB10   = Number(el("caCapPortaPalletsB10")?.value)   || 0;
-  const capPortaPalletsB20   = Number(el("caCapPortaPalletsB20")?.value)   || 0;
-  const capBlueBoxB10        = Number(el("caCapBlueBoxB10")?.value)        || 0;
-  const capBlueBoxB20        = Number(el("caCapBlueBoxB20")?.value)        || 0;
-  const capBlueBoxIndividual = Number(el("caCapBlueBoxIndividual")?.value) || 0;
-  const capTMX               = Number(el("caCapTMX")?.value)               || 0;
-
-  ZONE_DATA.base10.capacity       = capPortaPalletsB10;
-  ZONE_DATA.base20.capacity       = capPortaPalletsB20;
-  ZONE_DATA.blocado.capacity      = capBlocado;
-  ZONE_DATA.bbpalletb10.capacity  = capBlueBoxB10;
-  ZONE_DATA.bbpalletb20.capacity  = capBlueBoxB20;
-  ZONE_DATA.bbindividual.capacity = capBlueBoxIndividual;
-  ZONE_DATA.tmx.capacity          = capTMX;
+function getZoneCapacities() {
+  return {
+    portaPalletsB10:   Number(el("caLcbCapPortaPalletsB10")?.value)   || 0,
+    portaPalletsB20:   Number(el("caLcbCapPortaPalletsB20")?.value)   || 0,
+    blueBoxB10:        Number(el("caLcbCapBlueBoxB10")?.value)        || 0,
+    blueBoxB20:        Number(el("caLcbCapBlueBoxB20")?.value)        || 0,
+    blueBoxIndividual: Number(el("caLcbCapBlueBoxIndividual")?.value) || 0,
+    blocado:           Number(el("caLcbCapBlocado")?.value)           || 0,
+    tmx:               Number(el("caLcbCapTMX")?.value)               || 0,
+    // volumeFuturo lido do controle do mapa (caVolumeFuturo)
+  };
 }
 
 /* =========================================================================
-   HELPER — lê os valores de projeção futura dos inputs e repassa ao overlay
+   LEITURA DAS OCUPAÇÕES POR ZONA (seção "Ocupadas por Tipo")
 ========================================================================= */
+function getZoneOccupied() {
+  return {
+    portaPalletsB10:    Number(el("caCapPortaPalletsB10")?.value)    || 0,
+    portaPalletsB20:    Number(el("caCapPortaPalletsB20")?.value)    || 0,
+    blueBoxB10:         Number(el("caCapBlueBoxB10")?.value)         || 0,
+    blueBoxB20:         Number(el("caCapBlueBoxB20")?.value)         || 0,
+    blueBoxIndividual:  Number(el("caCapBlueBoxIndividual")?.value)  || 0,
+    blocado:            Number(el("caCapBlocado")?.value)            || 0,
+    tmx:                Number(el("caCapTMX")?.value)                || 0,
+  };
+}
+
+/* =========================================================================
+   SUBTRAÇÃO POR ZONA: capacidade − ocupada
+   Atualiza os spans "Disponível: X cx" ao lado de cada campo de ocupação,
+   e retorna o objeto com os disponíveis calculados.
+========================================================================= */
+function calcAndRenderZoneDisponivel() {
+  const cap = getZoneCapacities();
+  const occ = getZoneOccupied();
+
+  const pairs = [
+    { dispId: "dispPortaPalletsB10",    cap: cap.portaPalletsB10,   occ: occ.portaPalletsB10   },
+    { dispId: "dispPortaPalletsB20",    cap: cap.portaPalletsB20,   occ: occ.portaPalletsB20   },
+    { dispId: "dispBlueBoxB10",         cap: cap.blueBoxB10,        occ: occ.blueBoxB10        },
+    { dispId: "dispBlueBoxB20",         cap: cap.blueBoxB20,        occ: occ.blueBoxB20        },
+    { dispId: "dispBlueBoxIndividual",  cap: cap.blueBoxIndividual, occ: occ.blueBoxIndividual },
+    { dispId: "dispBlocado",            cap: cap.blocado,           occ: occ.blocado           },
+    { dispId: "dispTMX",                cap: cap.tmx,               occ: occ.tmx               },
+  ];
+
+  const result = {};
+  pairs.forEach(({ dispId, cap: c, occ: o }) => {
+    const disp = Math.max(0, c - o);
+    const dispEl = el(dispId);
+    if (dispEl) {
+      const pct    = c > 0 ? Math.round((o / c) * 100) : 0;
+      const status = statusByRate(pct);
+      const colorMap = { ok: "#16a34a", warning: "#d97706", critical: "#dc2626" };
+      dispEl.textContent = `Disponível: ${fmt.int(disp)} cx (${pct}%)`;
+      dispEl.style.color = colorMap[status];
+    }
+    result[dispId] = disp;
+  });
+
+  return result;
+}
+
+/* =========================================================================
+   TOTAIS CALCULADOS A PARTIR DAS ZONAS
+
+   capacity   = soma de todas as capacidades por zona
+   currentOcc = soma de todas as ocupações por zona
+
+   Esses dois valores substituem os campos únicos que foram removidos
+   (caLcbCapacity e caCurrentOccupation).
+========================================================================= */
+function calcTotalsFromZones() {
+  const cap = getZoneCapacities();
+  const occ = getZoneOccupied();
+
+  const capacity = (
+    cap.portaPalletsB10 +
+    cap.portaPalletsB20 +
+    cap.blueBoxB10 +
+    cap.blueBoxB20 +
+    cap.blueBoxIndividual +
+    cap.blocado +
+    cap.tmx
+  );
+
+  const currentOcc = (
+    occ.portaPalletsB10 +
+    occ.portaPalletsB20 +
+    occ.blueBoxB10 +
+    occ.blueBoxB20 +
+    occ.blueBoxIndividual +
+    occ.blocado +
+    occ.tmx
+  );
+
+  return { capacity, currentOcc };
+}
+
+/* =========================================================================
+   SINCRONIZA OCUPAÇÃO ATUAL POR ZONA no ZONE_DATA (para o mapa/overlay)
+========================================================================= */
+function syncZoneCapacitiesFromInputs() {
+  const cap = getZoneCapacities();
+  const occ = getZoneOccupied();
+
+  // Atualiza ZONE_DATA com capacidades reais dos inputs de Capacidade LCB
+  if (ZONE_DATA.base10)       ZONE_DATA.base10.capacity       = cap.portaPalletsB10;
+  if (ZONE_DATA.base20)       ZONE_DATA.base20.capacity       = cap.portaPalletsB20;
+  if (ZONE_DATA.bbpalletb10)  ZONE_DATA.bbpalletb10.capacity  = cap.blueBoxB10;
+  if (ZONE_DATA.bbpalletb20)  ZONE_DATA.bbpalletb20.capacity  = cap.blueBoxB20;
+  if (ZONE_DATA.bbindividual) ZONE_DATA.bbindividual.capacity = cap.blueBoxIndividual;
+  if (ZONE_DATA.blocado)      ZONE_DATA.blocado.capacity      = cap.blocado;
+  if (ZONE_DATA.tmx)          ZONE_DATA.tmx.capacity         = cap.tmx;
+
+  // Atualiza ocupação atual e baseOcc para o overlay
+  const zoneOccMap = {
+    base10:       occ.portaPalletsB10,
+    base20:       occ.portaPalletsB20,
+    bbpalletb10:  occ.blueBoxB10,
+    bbpalletb20:  occ.blueBoxB20,
+    bbindividual: occ.blueBoxIndividual,
+    blocado:      occ.blocado,
+    tmx:          occ.tmx,
+  };
+
+  Object.entries(zoneOccMap).forEach(([id, value]) => {
+    const zone = ZONE_DATA[id];
+    if (!zone) return;
+    zone.occupied = value;
+    zone.baseOcc  = zone.capacity > 0 ? (value / zone.capacity) * 100 : 0;
+  });
+
+  // Renderiza os disponíveis nos inputs
+  calcAndRenderZoneDisponivel();
+}
+
+/* =========================================================================
+   CONTEXTO DA PREVISÃO POR ZONA
+========================================================================= */
+function _getZoneCurrentOccupied() {
+  const occ = getZoneOccupied();
+  return {
+    "Base 10":             occ.portaPalletsB10,
+    "Base 20":             occ.portaPalletsB20,
+    "Blue Box Base 10":    occ.blueBoxB10,
+    "Blue Box Base 20":    occ.blueBoxB20,
+    "Blue Box Individual": occ.blueBoxIndividual,
+    "Blocado":             occ.blocado,
+    "T;M;4;0;X;90":       occ.tmx,
+  };
+}
+
 function _syncFutureVolumeContext() {
-  const currentOcc  = Number(el("caCurrentOccupation")?.value) || 0;
-  const volumeAtual = Number(el("caVolumeFuturo")?.value)      || 0;
-  const volumeFut   = Number(el("productionVolume")?.value)    || 0;
+  // caVolumeFuturo = Produção HOJE (veíc./dia) — campo Vol. Atual no mapa
+  // productionVolume = Produção FUTURA (veíc./dia) — campo Vol. Futuro no mapa
+  // Fórmula overlay: OcupFutura% = (OcupHoje_cx / Cap_zona) × (ProdFutura / ProdHoje) × 100
+  const producaoHoje   = Number(el("caVolumeFuturo")?.value)   || 0;
+  const producaoFutura = Number(el("productionVolume")?.value) || 0;
 
   window.lcbZonesOverlay?.setOverlayContext?.({
-    currentOcc,
-    volumeAtual,
-    volumeFuturo: volumeFut,
+    zoneCurrentOccupied: _getZoneCurrentOccupied(),
+    volumeAtual:  producaoHoje,    // Produção Hoje
+    volumeFuturo: producaoFutura,  // Produção Futura
   });
 }
 
@@ -328,26 +464,38 @@ function periodToQuarterLabel(period) {
   return `Q${q}/${year}`;
 }
 
-function renderTimelineTicks() {
+function renderTimelineTicks(periodsOverride) {
   const rangeEl = el("timelineRange");
   const wrapEl  = el("sliderTicksWrap");
   if (!rangeEl) return;
 
-  rangeEl.max = PERIODS.length - 1;
+  // Usa o array de períodos do Excel se disponível, senão usa o padrão
+  const activePeriods = periodsOverride || PERIODS;
+  rangeEl.max = activePeriods.length - 1;
+  // Atualiza referência global usada pelo listener
+  State._activePeriods = activePeriods;
 
   if (!wrapEl) return;
 
-  const total = PERIODS.length;
+  const total = activePeriods.length;
   const ticks = [];
 
-  PERIODS.forEach((p, i) => {
+  activePeriods.forEach((p, i) => {
     const [mon] = p.split("/");
     const m = _MONTH_TO_NUM[mon] ?? 1;
     if (m !== 1 && m !== 4 && m !== 7 && m !== 10) return;
-    const pct = (i / (total - 1)) * 100;
+    const pct = (i / Math.max(total - 1, 1)) * 100;
     const label = periodToQuarterLabel(p);
     ticks.push({ pct, label, i });
   });
+
+  // Se poucos ticks (dados densos), mostra um por período
+  if (ticks.length === 0) {
+    activePeriods.forEach((p, i) => {
+      const pct = (i / Math.max(activePeriods.length - 1, 1)) * 100;
+      ticks.push({ pct, label: p, i });
+    });
+  }
 
   wrapEl.innerHTML = ticks.map(({ pct, label }) => `
     <span class="timeline-tick" style="left:${pct}%">
@@ -357,17 +505,78 @@ function renderTimelineTicks() {
 }
 
 /* =========================================================================
-   MAPA — controles inline (timeline + produção)
+   CALIBRA TIMELINE COM PERÍODOS REAIS DO EXCEL
+   Extrai todas as datas de introduction_date únicas, ordena,
+   e reconfigura o slider para cobrir exatamente esse range.
 ========================================================================= */
+function calibrateTimelineFromRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  const MON_PT = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+
+  // Coleta chaves únicas de introduction_date
+  const keySet = new Set();
+  rows.forEach(row => {
+    const raw = row.introduction_date ?? row.introductionDate ?? row.intro_date ?? "";
+    if (!raw) return;
+    const k = window.lcbZonesOverlay?.periodKey?.(raw);
+    if (k != null && Number.isFinite(k)) keySet.add(k);
+  });
+
+  // Sem datas no Excel → usa PERIODS padrão, não interfere
+  if (keySet.size === 0) return;
+
+  const sortedKeys = [...keySet].sort((a, b) => a - b);
+  const minKey = sortedKeys[0];
+  const maxKey = sortedKeys[sortedKeys.length - 1];
+
+  // Proteção: range muito grande (>120 meses = 10 anos) → usa PERIODS
+  if (maxKey - minKey > 120) return;
+
+  // Gera labels mês a mês entre min e max
+  const periods = [];
+  for (let k = minKey; k <= maxKey; k++) {
+    const rawMonth = k % 12;
+    const month = rawMonth === 0 ? 12 : rawMonth;
+    const year  = rawMonth === 0 ? Math.floor(k / 12) - 1 : Math.floor(k / 12);
+    if (month >= 1 && month <= 12 && year >= 2020) {
+      periods.push(`${MON_PT[month - 1]}/${year}`);
+    }
+  }
+
+  if (periods.length < 2) return; // Menos de 2 períodos → não vale calibrar
+
+  State._activePeriods = periods;
+  State.periodIndex    = 0;
+
+  const rangeEl = el("timelineRange");
+  if (rangeEl) {
+    rangeEl.min   = 0;
+    rangeEl.max   = periods.length - 1;
+    rangeEl.value = 0;
+  }
+
+  const periodLabel = el("selectedPeriod");
+  if (periodLabel) periodLabel.textContent = periods[0];
+
+  renderTimelineTicks(periods);
+  renderSliderProgress(0);
+
+  console.info(`[LCB] Timeline: ${periods[0]} → ${periods[periods.length - 1]} (${periods.length} meses)`);
+}
+
+
 function initMapControls() {
   el("timelineRange")?.addEventListener("input", e => {
     State.periodIndex = Number(e.target.value);
     renderSliderProgress(State.periodIndex);
 
+    // Usa períodos do Excel se disponível, senão fallback ao array padrão
+    const activePeriods = State._activePeriods || PERIODS;
+    const currentPeriod = activePeriods[State.periodIndex] || PERIODS[State.periodIndex];
+
     const periodLabel = el("selectedPeriod");
-    if (periodLabel) {
-      periodLabel.textContent = PERIODS[State.periodIndex];
-    }
+    if (periodLabel) periodLabel.textContent = currentPeriod;
 
     if (State.hasRealData && State.lastResult) {
       syncWarehouseFromResult(State.lastResult);
@@ -379,7 +588,6 @@ function initMapControls() {
   el("productionVolume")?.addEventListener("input", e => {
     const v = Number(e.target.value);
     State.productionVolume = Number.isFinite(v) && v >= 0 ? v : 0;
-    // Repassa volume futuro ao overlay ao mudar o slider
     _syncFutureVolumeContext();
     if (State.hasRealData && State.lastResult) {
       syncWarehouseFromResult(State.lastResult);
@@ -399,7 +607,7 @@ function initMapControls() {
 }
 
 /* =========================================================================
-   WAREHOUSE TRIGGER BADGES (v7.3)
+   WAREHOUSE TRIGGER BADGES
 ========================================================================= */
 function updateWarehouseTriggerBadges(rates) {
   const container = el("warehouseTriggerBadges");
@@ -415,7 +623,7 @@ function updateWarehouseTriggerBadges(rates) {
   container.innerHTML = featured.map(({ id, label }) => {
     const rate   = rates[id] ?? ZONE_DATA[id]?.baseOcc ?? 0;
     const status = statusByRate(rate);
-    return `<span class="wh-trigger-badge wh-trigger-badge--${status}">${label} · ${rate}%</span>`;
+    return `<span class="wh-trigger-badge wh-trigger-badge--${status}">${label} · ${Math.round(rate)}%</span>`;
   }).join("");
 
   Object.entries(rates).forEach(([id, rate]) => {
@@ -448,21 +656,22 @@ function renderWarehouseOverlay(sourceRows, result) {
     ? sourceRows
     : (Array.isArray(State.lastRows) ? State.lastRows : []);
 
+  // Usa períodos calibrados com o Excel se disponível
+  const activePeriods  = State._activePeriods || PERIODS;
   const selectedPeriod = el("selectedPeriod")?.textContent
-    || PERIODS[State.periodIndex]
+    || activePeriods[State.periodIndex]
     || null;
 
   const project = State.selectedProject;
 
-  // Passa contexto incluindo valores para cálculo de ocupação futura
   overlay.setOverlayContext?.({
     selectedPeriod,
     project,
     thresholdMedium: STATUS_THRESHOLD.WARNING,
     thresholdHigh:   STATUS_THRESHOLD.CRITICAL,
-    currentOcc:   Number(el("caCurrentOccupation")?.value) || 0,
-    volumeAtual:  Number(el("caVolumeFuturo")?.value)      || 0,
-    volumeFuturo: State.productionVolume                   || 0,
+    zoneCurrentOccupied: _getZoneCurrentOccupied(),
+    volumeAtual:  Number(el("caVolumeFuturo")?.value)    || 0,  // Produção Hoje
+    volumeFuturo: Number(el("productionVolume")?.value)  || State.productionVolume || 0,  // Produção Futura
   });
 
   overlay.renderZoneOverlay(rows, {
@@ -476,24 +685,24 @@ function renderWarehouseOverlay(sourceRows, result) {
 /* =========================================================================
    WAREHOUSE SIMULADO (fallback sem dados reais)
 ========================================================================= */
-function calcZoneRates(periodIndex, productionVolume) {
-  const clamp  = v => Math.min(99, Math.round(v));
-  const factor = 1 + periodIndex * 0.007 + productionVolume * 0.0003;
-  const rates  = {};
+function calcZoneRates() {
+  const rates = {};
   Object.entries(ZONE_DATA).forEach(([id, z]) => {
-    rates[id] = clamp(z.baseOcc * factor);
+    const occupied = Number(z.occupied ?? 0);
+    rates[id] = z.capacity > 0 ? Math.max(0, Math.round((occupied / z.capacity) * 100)) : 0;
   });
   return rates;
 }
 
 function updateWarehouseSimulated() {
-  const zones = calcZoneRates(State.periodIndex, State.productionVolume);
+  const zones = calcZoneRates();
   renderZones(zones);
   updateWarehouseTriggerBadges(zones);
 
+  const inputs = getCAInputs();
   const rows = Array.isArray(State.lastRows) && State.lastRows.length > 0
     ? State.lastRows
-    : buildMockRows(calcCA(getCAInputs()));
+    : buildMockRows(calcCA(inputs));
 
   renderWarehouseOverlay(rows, {
     selectedPeriod:  PERIODS[State.periodIndex],
@@ -509,20 +718,10 @@ function updateWarehouseSimulated() {
 function syncWarehouseFromResult(result) {
   if (!result) return;
 
-  const projectedOcc = Math.round(result.projectedOcc ?? result.projected ?? 0);
+  syncZoneCapacitiesFromInputs();
+  _syncFutureVolumeContext();
 
-  const zoneKeys  = Object.keys(ZONE_DATA);
-  const zoneTotal = zoneKeys.reduce((a, k) => a + ZONE_DATA[k].capacity, 0);
-  const rates = {};
-  zoneKeys.forEach(id => {
-    const z     = ZONE_DATA[id];
-    const share = zoneTotal > 0 ? z.capacity / zoneTotal : 0;
-    const zOcc  = Math.round(z.capacity * (z.baseOcc / 100));
-    const zAdd  = Math.round(projectedOcc * share);
-    const zProj = Math.min(z.capacity, zOcc + zAdd);
-    rates[id]   = z.capacity > 0 ? Math.round((zProj / z.capacity) * 100) : 0;
-  });
-
+  const rates = calcZoneRates();
   renderZones(rates);
   updateWarehouseTriggerBadges(rates);
   updateWarehouseTriggerSub(result);
@@ -676,30 +875,6 @@ const Tooltip = {
 /* =========================================================================
    FILTRO POR PROJETO
 ========================================================================= */
-function initProjectFilter() {
-  const container = el("caProjectFilter");
-  if (!container) return;
-  container.innerHTML = PROJECTS.map(p => `
-    <button
-      class="ca-project-chip ${p.id === State.selectedProject ? "ca-project-chip--active" : ""}"
-      data-project="${p.id}" type="button"
-      style="--chip-color: ${p.color}"
-      aria-pressed="${p.id === State.selectedProject}"
-    >${p.label}</button>
-  `).join("");
-  container.addEventListener("click", e => {
-    const btn = e.target.closest(".ca-project-chip");
-    if (!btn) return;
-    const projectId = btn.dataset.project;
-    State.selectedProject = projectId;
-    container.querySelectorAll(".ca-project-chip").forEach(chip => {
-      const isActive = chip.dataset.project === projectId;
-      chip.classList.toggle("ca-project-chip--active", isActive);
-      chip.setAttribute("aria-pressed", String(isActive));
-    });
-    if (el("caResultCards")?.style.display !== "none") handleCalcClick();
-  });
-}
 
 /* =========================================================================
    DRAWER
@@ -811,7 +986,7 @@ const Drawer = {
     const project      = PROJECTS.find(p => p.id === State.selectedProject) ?? PROJECTS[0];
     const projectLabel = State.selectedProjectName || result?.projectName || project.label;
     const status       = result?.status ?? "ok";
-    const cap          = result?.capacity ?? 140_000;
+    const cap          = result?.capacity ?? 0;
 
     const titleEl = el("drawerTitle");
     if (titleEl) titleEl.textContent = `Itens — ${projectLabel}`;
@@ -1020,54 +1195,98 @@ function initDrawer() {
 }
 
 /* =========================================================================
-   ANÁLISE DE CAPACIDADE — CÁLCULO LOCAL (v7.3)
+   ANÁLISE DE CAPACIDADE — CÁLCULO LOCAL
+
+   capacity   = soma automática das zonas de Capacidade LCB
+   currentOcc = soma automática das zonas de Ocupadas por Tipo
+   safetyMargin é calculada sobre a capacity total
 ========================================================================= */
 function getCAInputs() {
+  const { capacity, currentOcc } = calcTotalsFromZones();
+  const cap = getZoneCapacities();
+  const occ = getZoneOccupied();
+
   return {
-    capacity:              Number(el("caLcbCapacity")?.value)            || 140_000,
-    currentOcc:            Number(el("caCurrentOccupation")?.value)      || 110_000,
-    periodDays:            Number(el("caAnalysisPeriod")?.value)         || 15,
-    safetyMargin:          Number(el("caSafetyMargin")?.value)           || 0,
-    dailyRate:             7,
-    capBlocado:            Number(el("caCapBlocado")?.value)             || 19_800,
-    capPortaPalletsB10:    Number(el("caCapPortaPalletsB10")?.value)     || 37_400,
-    capPortaPalletsB20:    Number(el("caCapPortaPalletsB20")?.value)     || 30_600,
-    capBlueBoxB10:         Number(el("caCapBlueBoxB10")?.value)          || 8_000,
-    capBlueBoxB20:         Number(el("caCapBlueBoxB20")?.value)          || 8_000,
-    capBlueBoxIndividual:  Number(el("caCapBlueBoxIndividual")?.value)   || 4_200,
-    capTMX:                Number(el("caCapTMX")?.value)                 || 0,
-    volumeAtual:           Number(el("caVolumeFuturo")?.value)           || 0,
+    // Totais calculados automaticamente pelas zonas
+    capacity,
+    currentOcc,
+
+    // Margem de segurança — único campo mantido do bloco antigo
+    safetyMargin: Number(el("caSafetyMargin")?.value) || 0,
+
+    // Defaults de operação
+    periodDays: 15,
+    dailyRate:  7,
+
+    // Capacidades individuais por zona (para KPIs e overlay)
+    capPortaPalletsB10:   cap.portaPalletsB10,
+    capPortaPalletsB20:   cap.portaPalletsB20,
+    capBlueBoxB10:        cap.blueBoxB10,
+    capBlueBoxB20:        cap.blueBoxB20,
+    capBlueBoxIndividual: cap.blueBoxIndividual,
+    capBlocado:           cap.blocado,
+    capTMX:               cap.tmx,
+
+    // Ocupações individuais por zona (para KPIs e overlay)
+    occPortaPalletsB10:   occ.portaPalletsB10,
+    occPortaPalletsB20:   occ.portaPalletsB20,
+    occBlueBoxB10:        occ.blueBoxB10,
+    occBlueBoxB20:        occ.blueBoxB20,
+    occBlueBoxIndividual: occ.blueBoxIndividual,
+    occBlocado:           occ.blocado,
+    occTMX:               occ.tmx,
+
+    volumeAtual: Number(el("caVolumeFuturo")?.value) || 0,
   };
 }
 
-function calcCA(inputs) {
+function calcCA(inputs, totalProjectionOverride) {
   const { capacity, currentOcc, periodDays, safetyMargin, dailyRate } = inputs;
   const projectFactors = { todos: 1, china: 1.0, europa: 0.85, bev: 1.2, powertrain: 0.95 };
-  const factor         = projectFactors[State.selectedProject] ?? 1;
-  const volumePeriod   = State.productionVolume * periodDays;
-  const totalProjection = Math.round(volumePeriod * dailyRate * factor);
-  const usableCapacity  = Math.round(capacity * (1 - safetyMargin / 100));
+  const factor          = projectFactors[State.selectedProject] ?? 1;
+  const volumePeriod    = State.productionVolume * periodDays;
+
+  // Se veio override do backend, usa ele; senão calcula local
+  const totalProjection = totalProjectionOverride != null
+    ? Math.round(totalProjectionOverride)
+    : Math.round(volumePeriod * dailyRate * factor);
+
+  const safetyAbs       = Math.round(capacity * (safetyMargin / 100));
+  const usableCapacity  = Math.max(0, capacity - safetyAbs);
   const projectedOcc    = currentOcc + totalProjection;
-  const available       = capacity - projectedOcc;
-  const occRate         = (projectedOcc / capacity) * 100;
-  const status          = statusByRate(occRate);
+
+  const available = capacity - currentOcc - safetyAbs - totalProjection;
+
+  const occRate = capacity > 0
+    ? Math.min((projectedOcc / capacity) * 100, 200)
+    : 200;
+
+  const status = available < 0 ? "critical" : statusByRate(occRate);
+
   return {
     volumePeriod: totalProjection, totalProjection, capacity, currentOcc,
-    usableCapacity, projectedOcc, available, occRate, status, periodDays, dailyRate,
-    capBlocado:          inputs.capBlocado,
-    capPortaPalletsB10:  inputs.capPortaPalletsB10,
-    capPortaPalletsB20:  inputs.capPortaPalletsB20,
-    capBlueBoxB10:       inputs.capBlueBoxB10,
-    capBlueBoxB20:       inputs.capBlueBoxB20,
-    capBlueBoxIndividual:inputs.capBlueBoxIndividual,
-    capTMX:              inputs.capTMX,
-    // Mantém o nome volumeFuturo internamente para compatibilidade com o restante do código
-    volumeFuturo:        inputs.volumeAtual,
-    volumeAtual:         inputs.volumeAtual,
+    usableCapacity, projectedOcc, available, occRate, status,
+    safetyAbs, periodDays, dailyRate,
+    capPortaPalletsB10:   inputs.capPortaPalletsB10,
+    capPortaPalletsB20:   inputs.capPortaPalletsB20,
+    capBlueBoxB10:        inputs.capBlueBoxB10,
+    capBlueBoxB20:        inputs.capBlueBoxB20,
+    capBlueBoxIndividual: inputs.capBlueBoxIndividual,
+    capBlocado:           inputs.capBlocado,
+    capTMX:               inputs.capTMX,
+    occPortaPalletsB10:   inputs.occPortaPalletsB10,
+    occPortaPalletsB20:   inputs.occPortaPalletsB20,
+    occBlueBoxB10:        inputs.occBlueBoxB10,
+    occBlueBoxB20:        inputs.occBlueBoxB20,
+    occBlueBoxIndividual: inputs.occBlueBoxIndividual,
+    occBlocado:           inputs.occBlocado,
+    occTMX:               inputs.occTMX,
+    volumeAtual:          inputs.volumeAtual,
+    volumeFuturo:         inputs.volumeAtual,
   };
 }
 
-/* buildMockRows — v7.3: zonas separadas Blue Box B10 / B20 */
+/* buildMockRows */
 function buildMockRows(result) {
   const periods = ["JAN/2026", "MAR/2026", "MAI/2026", "JUL/2026"];
   const zones   = ["Base 10", "Base 20", "Blue Box Base 10", "Blue Box Base 20"];
@@ -1086,86 +1305,31 @@ function buildMockRows(result) {
 }
 
 /* =========================================================================
-   CHARTS
+   DONUT CHART
+   Os valores refletem diretamente a subtração zona a zona:
+     - Ocupação Atual  = soma das ocupadas
+     - Aumento PD      = volume projetado do PD
+     - Margem Seg.     = % sobre a capacidade total
+     - Disponível      = capacity - currOcc - volPD - margin
 ========================================================================= */
-function renderCAChart(result) {
-  const canvas = el("caCapacityChart");
-  if (!canvas || typeof Chart === "undefined") {
-    if (typeof Chart === "undefined") setTimeout(() => renderCAChart(result), 200);
-    return;
-  }
-  const cap      = Math.round(result.capacity);
-  const usable   = Math.round(result.usableCapacity ?? result.usable ?? cap);
-  const currOcc  = Math.round(result.currentOcc);
-  const projOcc  = Math.round(result.projectedOcc ?? result.projected ?? 0);
-  const critical = Math.round(cap * 0.9);
-  const months   = CHART_LABELS;
-  const n        = months.length;
-  const makeL    = (s, e) => months.map((_, i) => Math.round(s + (e - s) * (i / (n - 1))));
-
-  const datasets = [
-    { label: "Cap. Total",           data: months.map(() => cap),      borderColor: "rgba(143,183,240,0.7)", borderWidth: 1.5, borderDash: [10,6], pointRadius: 0, fill: false, tension: 0, order: 5 },
-    { label: "Cap. Utilizável",      data: months.map(() => usable),   borderColor: "rgba(37,99,168,0.6)",   borderWidth: 1.5, borderDash: [6,4],  pointRadius: 0, fill: false, tension: 0, order: 4 },
-    { label: "Ocup. Atual",          data: makeL(currOcc, currOcc),    borderColor: "#94a3b8",               borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.2, order: 3 },
-    { label: "Ocup. Projetada",      data: makeL(currOcc, projOcc),    borderColor: "#001533",               borderWidth: 2.5, pointRadius: ctx => (ctx.dataIndex === 0 || ctx.dataIndex === n - 1) ? 4 : 0, pointBackgroundColor: "#001533", pointBorderColor: "#fff", pointBorderWidth: 2, fill: { target: "2", above: "rgba(0,21,51,0.07)" }, tension: 0.3, order: 2 },
-    { label: "Limite Crítico (90%)", data: months.map(() => critical), borderColor: "rgba(220,38,38,0.65)",  borderWidth: 1.5, borderDash: [5,4], pointRadius: 0, fill: false, tension: 0, order: 1 },
-  ];
-
-  const tickMax = Math.ceil(cap * 1.12 / 10_000) * 10_000;
-  const tickMin = Math.floor(Math.min(currOcc, projOcc) * 0.85 / 10_000) * 10_000;
-
-  const opts = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: "rgba(0,21,51,0.95)", titleColor: "rgba(255,255,255,0.6)",
-        titleFont: { size: 11, weight: "600" }, bodyColor: "#ffffff",
-        bodyFont: { size: 12 }, padding: { x: 14, y: 10 }, cornerRadius: 8,
-        borderColor: "rgba(255,255,255,0.08)", borderWidth: 1, boxPadding: 4,
-        callbacks: {
-          title(i)  { return i[0]?.label ?? ""; },
-          label(ctx){ return ctx.parsed.y == null ? "" : `  ●  ${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString("pt-BR")} cx`; },
-          afterBody(){ return [""]; },
-        },
-        filter(i){ return i.dataset.label !== "_ref"; },
-      },
-    },
-    scales: {
-      x: { grid: { display: false }, border: { display: false }, ticks: { color: "#94a3b8", font: { size: 11 }, maxRotation: 0, padding: 8 } },
-      y: {
-        min: tickMin, max: tickMax,
-        grid: { color: "rgba(226,232,240,0.5)", drawBorder: false, lineWidth: 1 },
-        border: { display: false, dash: [4,4] },
-        ticks: { color: "#94a3b8", font: { size: 11 }, callback: v => (v / 1_000).toFixed(0) + "k", maxTicksLimit: 7, padding: 8 },
-      },
-    },
-    animation: { duration: 700, easing: "easeOutCubic" },
-  };
-
-  if (_caChart) {
-    _caChart.data.labels   = months;
-    _caChart.data.datasets = datasets;
-    _caChart.options       = opts;
-    _caChart.update();
-  } else {
-    _caChart = new Chart(canvas, { type: "line", data: { labels: months, datasets }, options: opts });
-  }
-}
-
 function renderDonutChart(result) {
   const canvas = el("caDonutChart");
   if (!canvas || typeof Chart === "undefined") {
     if (typeof Chart === "undefined") setTimeout(() => renderDonutChart(result), 200);
     return;
   }
+
   const cap     = Math.round(result.capacity);
   const currOcc = Math.round(result.currentOcc);
   const volPD   = Math.round(result.volumePeriod ?? result.totalProjection ?? 0);
-  const margin  = Math.round(cap * ((Number(el("caSafetyMargin")?.value) || 0) / 100));
-  const avail   = Math.max(0, cap - currOcc - volPD - margin);
-  const projOcc = Math.round(result.projectedOcc ?? result.projected ?? 0);
+  // Usa safetyAbs do result se disponível, senão recalcula
+  const margin  = result.safetyAbs != null
+    ? Math.round(result.safetyAbs)
+    : Math.round(cap * ((Number(el("caSafetyMargin")?.value) || 0) / 100));
+  // Disponível nunca negativo no donut — zero se excedeu
+  const availRaw = cap - currOcc - volPD - margin;
+  const avail    = Math.max(0, availRaw);
+  const projOcc  = Math.round(result.projectedOcc ?? result.projected ?? (currOcc + volPD));
 
   const center  = el("caDonutCenterValue");
   const cenLbl  = el("caDonutCenterLabel");
@@ -1204,7 +1368,8 @@ function renderDonutChart(result) {
         backgroundColor: "#001533", bodyColor: "#fff", padding: 10, cornerRadius: 8,
         callbacks: {
           label(ctx) {
-            return ` ${ctx.label}: ${Number(ctx.parsed).toLocaleString("pt-BR")} cx (${((ctx.parsed / cap) * 100).toFixed(1)}%)`;
+            const pct = cap > 0 ? ((ctx.parsed / cap) * 100).toFixed(1) : "0,0";
+            return ` ${ctx.label}: ${Number(ctx.parsed).toLocaleString("pt-BR")} cx (${pct}%)`;
           },
         },
       },
@@ -1223,16 +1388,23 @@ function renderDonutChart(result) {
 
 /* =========================================================================
    ENGINE
+   Reflete a subtração: Capacidade − Ocupação − Margem − Volume PD = Disponível
 ========================================================================= */
 function renderEngine(result) {
   const container = el("caEngineContainer");
   if (!container) return;
+
   const cap     = Math.round(result.capacity);
   const currOcc = Math.round(result.currentOcc);
-  const margin  = Math.round(cap * ((Number(el("caSafetyMargin")?.value) || 0) / 100));
+  // Usa safetyAbs do result se disponível, senão recalcula
+  const margin  = result.safetyAbs != null
+    ? Math.round(result.safetyAbs)
+    : Math.round(cap * ((Number(el("caSafetyMargin")?.value) || 0) / 100));
   const volPD   = Math.round(result.volumePeriod ?? result.totalProjection ?? 0);
   const avail   = cap - currOcc - margin - volPD;
-  const status  = result.status ?? statusByRate(result.occRate);
+
+  // Status real: crítico se negativo
+  const status  = avail < 0 ? "critical" : (result.status ?? statusByRate(result.occRate));
   const rClass  = status === "critical" ? "ca-engine-step--crit" :
                   status === "warning"  ? "ca-engine-step--warn" :
                   "ca-engine-step--ok";
@@ -1248,9 +1420,9 @@ function renderEngine(result) {
 
   container.innerHTML = `
     <div class="ca-engine">
-      ${step("CAPACIDADE", cap,     "Capacidade Total")}
+      ${step("CAPACIDADE", cap,     "Σ Capacidade por Zona")}
       ${op("−")}
-      ${step("OCUPAÇÃO",   currOcc, "Ocupação Atual")}
+      ${step("OCUPAÇÃO",   currOcc, "Σ Ocupação por Zona")}
       ${op("−")}
       ${step("MARGEM",     margin,  "Margem de Segurança")}
       ${op("−")}
@@ -1265,7 +1437,7 @@ function renderEngine(result) {
 }
 
 /* =========================================================================
-   VEREDICTO, KPIS, RECOMENDAÇÃO
+   VEREDICTO
 ========================================================================= */
 function renderCAVerdict(result) {
   const verdict = el("caVerdict");
@@ -1297,7 +1469,7 @@ function renderCAVerdict(result) {
 }
 
 /* =========================================================================
-   renderCAKpis — v7.3
+   KPIs — mostra capacidade e ocupação por zona + disponível calculado
 ========================================================================= */
 function renderCAKpis(result) {
   const grid = el("caKpiGrid");
@@ -1305,27 +1477,42 @@ function renderCAKpis(result) {
 
   const cap     = result.capacity;
   const currOcc = result.currentOcc;
-  const avail   = result.available ?? 0;
+  const avail   = result.available ?? (cap - currOcc);
   const occRate = result.occRate ?? 0;
   const status  = result.status ?? statusByRate(occRate);
 
-  const capBlocado           = result.capBlocado           ?? Number(el("caCapBlocado")?.value)           ?? 19_800;
-  const capPortaPalletsB10   = result.capPortaPalletsB10   ?? Number(el("caCapPortaPalletsB10")?.value)   ?? 37_400;
-  const capPortaPalletsB20   = result.capPortaPalletsB20   ?? Number(el("caCapPortaPalletsB20")?.value)   ?? 30_600;
-  const capBlueBoxB10        = result.capBlueBoxB10        ?? Number(el("caCapBlueBoxB10")?.value)        ?? 8_000;
-  const capBlueBoxB20        = result.capBlueBoxB20        ?? Number(el("caCapBlueBoxB20")?.value)        ?? 8_000;
-  const capBlueBoxIndividual = result.capBlueBoxIndividual ?? Number(el("caCapBlueBoxIndividual")?.value) ?? 4_200;
-  const capTMX               = result.capTMX               ?? Number(el("caCapTMX")?.value)               ?? 0;
-  const volumeAtual          = result.volumeAtual          ?? Number(el("caVolumeFuturo")?.value)         ?? 0;
-
-  // Cálculo da ocupação futura global
-  const volumeFuturo = State.productionVolume || 0;
-  const occFuturaGlobal = (volumeAtual > 0 && occRate > 0)
-    ? Math.min((occRate * (volumeFuturo / volumeAtual)), 200)
-    : null;
-
   const kSC = status === "critical" ? "ca-kpi--crit" :
               status === "warning"  ? "ca-kpi--warn" : "ca-kpi--ok";
+
+  // Disponíveis por zona: capacidade − ocupada
+  const dispB10  = Math.max(0, (result.capPortaPalletsB10   || 0) - (result.occPortaPalletsB10   || 0));
+  const dispB20  = Math.max(0, (result.capPortaPalletsB20   || 0) - (result.occPortaPalletsB20   || 0));
+  const dispBB10 = Math.max(0, (result.capBlueBoxB10        || 0) - (result.occBlueBoxB10        || 0));
+  const dispBB20 = Math.max(0, (result.capBlueBoxB20        || 0) - (result.occBlueBoxB20        || 0));
+  const dispBBI  = Math.max(0, (result.capBlueBoxIndividual || 0) - (result.occBlueBoxIndividual || 0));
+  const dispBloc = Math.max(0, (result.capBlocado           || 0) - (result.occBlocado           || 0));
+  const dispTMX  = Math.max(0, (result.capTMX               || 0) - (result.occTMX               || 0));
+
+  // Fórmula: Ocup. Futura % = (OcupHoje_cx × ProdFutura / ProdHoje) / Capacidade × 100
+  const producaoHoje   = Number(el("caVolumeFuturo")?.value)   || 0;
+  const producaoFutura = Number(el("productionVolume")?.value) || State.productionVolume || 0;
+  const capacidadeTotal = cap || 1;
+  const occFuturaGlobal = (producaoHoje > 0 && cap > 0)
+    ? Math.min(((currOcc * producaoFutura / producaoHoje) / capacidadeTotal) * 100, 200)
+    : null;
+
+  const occFuturaStr    = occFuturaGlobal !== null ? `${occFuturaGlobal.toFixed(1).replace(".", ",")}%` : "—";
+  const occFuturaStatus = occFuturaGlobal !== null ? statusByRate(occFuturaGlobal) : "ok";
+  const occFuturaClass  = occFuturaGlobal !== null
+    ? (occFuturaStatus === "critical" ? "ca-kpi--crit" : occFuturaStatus === "warning" ? "ca-kpi--warn" : "ca-kpi--ok")
+    : "";
+
+  const availDisplay = avail < 0
+    ? `−${fmt.int(Math.abs(Math.round(avail)))}`
+    : fmt.int(Math.round(avail));
+  const availDesc = avail < 0
+    ? `Excedido em ${fmt.int(Math.abs(Math.round(avail)))} cx`
+    : "Folga após introdução do PD";
 
   const kpi = (label, value, unit, desc, iconKey, cls = "") => `
     <div class="ca-kpi ${cls}">
@@ -1338,28 +1525,18 @@ function renderCAKpis(result) {
       <span class="ca-kpi__desc">${desc}</span>
     </div>`;
 
-  // KPI de ocupação futura com classe dinâmica
-  const occFuturaStr = occFuturaGlobal !== null
-    ? `${occFuturaGlobal.toFixed(1).replace(".", ",")}%`
-    : "—";
-  const occFuturaStatus = occFuturaGlobal !== null ? statusByRate(occFuturaGlobal) : "ok";
-  const occFuturaClass  = occFuturaGlobal !== null
-    ? (occFuturaStatus === "critical" ? "ca-kpi--crit" : occFuturaStatus === "warning" ? "ca-kpi--warn" : "ca-kpi--ok")
-    : "";
-
   grid.innerHTML =
-    kpi("Capacidade Total",        fmt.int(cap),                        "caixas", "Espaço físico total do LCB",          "boxes") +
-    kpi("Ocupação Atual",          fmt.int(Math.round(currOcc)),        "caixas", "Inventário atual no LCB",             "users") +
-    kpi("Capacidade Disponível",   fmt.int(Math.round(avail)),          "caixas", "Folga após introdução do PD",         "check",   kSC) +
-    kpi("Ocup. Futura Projetada",  occFuturaStr,                        "%",      `Com ${fmt.int(volumeFuturo)} veíc./dia`,  "trending", occFuturaClass) +
-    kpi("Blocado",                 fmt.int(capBlocado),                 "caixas", "Cap. zona de bloqueio",               "lock",    "ca-kpi--highlight") +
-    kpi("Porta Pallets Base 10",   fmt.int(capPortaPalletsB10),         "caixas", "Cap. Base 10",                        "layers",  "ca-kpi--highlight") +
-    kpi("Porta Pallets Base 20",   fmt.int(capPortaPalletsB20),         "caixas", "Cap. Base 20",                        "layers",  "ca-kpi--highlight") +
-    kpi("Blue Box Base 10",        fmt.int(capBlueBoxB10),              "caixas", "Cap. Blue Box pallet base 10",        "cube",    "ca-kpi--highlight") +
-    kpi("Blue Box Base 20",        fmt.int(capBlueBoxB20),              "caixas", "Cap. Blue Box pallet base 20",        "cube",    "ca-kpi--highlight") +
-    kpi("Blue Box Individual",     fmt.int(capBlueBoxIndividual),       "caixas", "Cap. Blue Box individual",            "cube",    "ca-kpi--highlight") +
-    kpi("T;M;4;0;X;90",           fmt.int(capTMX),                     "caixas", "Cap. zona T;M;4;0;X;90",             "layers",  "ca-kpi--highlight") +
-    kpi("Volume Produto Atual",    fmt.int(volumeAtual),                "caixas", "Volume de produto informado",         "boxes",   "ca-kpi--highlight");
+    kpi("Capacidade Total (Σ Zonas)", fmt.int(cap),                        "caixas", "Soma das capacidades por zona",        "boxes") +
+    kpi("Ocupação Total (Σ Zonas)",   fmt.int(Math.round(currOcc)),        "caixas", "Soma das ocupações por zona",          "users") +
+    kpi("Capacidade Disponível",      availDisplay,                        "caixas", availDesc,                             "check",   kSC) +
+    kpi("Ocup. Futura Projetada",     occFuturaStr,                        "%",      `${fmt.int(Math.round(currOcc))} cx × ${fmt.int(producaoFutura)} ÷ ${fmt.int(producaoHoje)} veíc./dia`,   "trending", occFuturaClass) +
+    kpi("Disp. Porta Pallets B10",    fmt.int(dispB10),                   "caixas", `Cap ${fmt.int(result.capPortaPalletsB10 || 0)} − Occ ${fmt.int(result.occPortaPalletsB10 || 0)}`,  "layers",  "ca-kpi--highlight") +
+    kpi("Disp. Porta Pallets B20",    fmt.int(dispB20),                   "caixas", `Cap ${fmt.int(result.capPortaPalletsB20 || 0)} − Occ ${fmt.int(result.occPortaPalletsB20 || 0)}`,  "layers",  "ca-kpi--highlight") +
+    kpi("Disp. Blue Box B10",         fmt.int(dispBB10),                  "caixas", `Cap ${fmt.int(result.capBlueBoxB10 || 0)} − Occ ${fmt.int(result.occBlueBoxB10 || 0)}`,            "cube",    "ca-kpi--highlight") +
+    kpi("Disp. Blue Box B20",         fmt.int(dispBB20),                  "caixas", `Cap ${fmt.int(result.capBlueBoxB20 || 0)} − Occ ${fmt.int(result.occBlueBoxB20 || 0)}`,            "cube",    "ca-kpi--highlight") +
+    kpi("Disp. Blue Box Individual",  fmt.int(dispBBI),                   "caixas", `Cap ${fmt.int(result.capBlueBoxIndividual || 0)} − Occ ${fmt.int(result.occBlueBoxIndividual || 0)}`, "cube", "ca-kpi--highlight") +
+    kpi("Disp. Blocado",              fmt.int(dispBloc),                  "caixas", `Cap ${fmt.int(result.capBlocado || 0)} − Occ ${fmt.int(result.occBlocado || 0)}`,                   "lock",    "ca-kpi--highlight") +
+    kpi("Disp. T;M;4;0;X;90",        fmt.int(dispTMX),                   "caixas", `Cap ${fmt.int(result.capTMX || 0)} − Occ ${fmt.int(result.occTMX || 0)}`,                           "layers",  "ca-kpi--highlight");
 }
 
 function renderCARecommendation(result) {
@@ -1426,30 +1603,44 @@ function handleCalcClick() {
 
       State.selectedProjectName = simulation.projeto || State.selectedProjectName;
 
-      const inputs = getCAInputs();
+      const inputs     = getCAInputs();
+      // Recalcula localmente usando o volumePeriod REAL do backend
+      // para garantir que status/available batem com o que é exibido
+      const backendVol = calcResult.volumePeriod ?? 0;
+      const localCalc  = calcCA(inputs, backendVol);
+
       const resultForRender = {
-        status:              calcResult.status,
-        occRate:             calcResult.occRate,
-        volumePeriod:        calcResult.volumePeriod,
-        capacity:            calcResult.capacity,
-        currentOcc:          calcResult.currentOcc,
-        usableCapacity:      calcResult.usable,
-        projectedOcc:        calcResult.projected,
-        available:           calcResult.available,
-        increaseNeeded:      calcResult.increaseNeeded,
-        totalProjection:     calcResult.volumePeriod,
-        projectName:         simulation.projeto || "",
-        porZona:             simulation.por_zona || {},
-        zones:               Array.isArray(simulation.zones) ? simulation.zones : [],
-        capBlocado:          inputs.capBlocado,
-        capPortaPalletsB10:  inputs.capPortaPalletsB10,
-        capPortaPalletsB20:  inputs.capPortaPalletsB20,
-        capBlueBoxB10:       inputs.capBlueBoxB10,
-        capBlueBoxB20:       inputs.capBlueBoxB20,
-        capBlueBoxIndividual:inputs.capBlueBoxIndividual,
-        capTMX:              inputs.capTMX,
-        volumeFuturo:        inputs.volumeAtual,
-        volumeAtual:         inputs.volumeAtual,
+        // Tudo de localCalc — calculado com volumePeriod real do backend
+        status:               localCalc.status,
+        occRate:              localCalc.occRate,
+        available:            localCalc.available,
+        safetyAbs:            localCalc.safetyAbs,
+        projectedOcc:         localCalc.projectedOcc,
+        usableCapacity:       localCalc.usableCapacity,
+        volumePeriod:         localCalc.volumePeriod,
+        totalProjection:      localCalc.totalProjection,
+        capacity:             localCalc.capacity,
+        currentOcc:           localCalc.currentOcc,
+        increaseNeeded:       calcResult.increaseNeeded,
+        projectName:          simulation.projeto || "",
+        porZona:              simulation.por_zona || {},
+        zones:                Array.isArray(simulation.zones) ? simulation.zones : [],
+        capPortaPalletsB10:   inputs.capPortaPalletsB10,
+        capPortaPalletsB20:   inputs.capPortaPalletsB20,
+        capBlueBoxB10:        inputs.capBlueBoxB10,
+        capBlueBoxB20:        inputs.capBlueBoxB20,
+        capBlueBoxIndividual: inputs.capBlueBoxIndividual,
+        capBlocado:           inputs.capBlocado,
+        capTMX:               inputs.capTMX,
+        occPortaPalletsB10:   inputs.occPortaPalletsB10,
+        occPortaPalletsB20:   inputs.occPortaPalletsB20,
+        occBlueBoxB10:        inputs.occBlueBoxB10,
+        occBlueBoxB20:        inputs.occBlueBoxB20,
+        occBlueBoxIndividual: inputs.occBlueBoxIndividual,
+        occBlocado:           inputs.occBlocado,
+        occTMX:               inputs.occTMX,
+        volumeAtual:          inputs.volumeAtual,
+        volumeFuturo:         inputs.volumeAtual,
       };
 
       renderAll(resultForRender);
@@ -1461,6 +1652,13 @@ function handleCalcClick() {
 function renderAll(result) {
   State.lastResult  = result;
   State.hasRealData = true;
+
+  // Calibra a timeline apenas na primeira vez que dados reais chegam
+  // (evita resetar o slider a cada recálculo manual)
+  if (!State._timelineCalibrated && Array.isArray(State.lastRows) && State.lastRows.length > 0) {
+    calibrateTimelineFromRows(State.lastRows);
+    State._timelineCalibrated = true;
+  }
 
   renderCAVerdict(result);
   renderCAKpis(result);
@@ -1482,7 +1680,7 @@ function runLocalCACalculation() {
 }
 
 /* =========================================================================
-   EVENTOS DE ANÁLISE (v7.3)
+   EVENTOS DE ANÁLISE
 ========================================================================= */
 function initAnalise() {
   if (!_calcListenerAttached) {
@@ -1491,21 +1689,29 @@ function initAnalise() {
   }
 
   el("btnUseMock")?.addEventListener("click", () => {
-    const defaults = {
-      caLcbCapacity:           140_000,
-      caCurrentOccupation:     110_000,
-      caAnalysisPeriod:        15,
-      caSafetyMargin:          10,
-      caCapBlocado:            19_800,
-      caCapPortaPalletsB10:    37_400,
-      caCapPortaPalletsB20:    30_600,
-      caCapBlueBoxB10:         8_000,
-      caCapBlueBoxB20:         8_000,
-      caCapBlueBoxIndividual:  4_200,
-      caCapTMX:                0,
-      caVolumeFuturo:          0,
+    // Valores padrão para Capacidade LCB
+    const capDefaults = {
+      caLcbCapPortaPalletsB10:   68_000,
+      caLcbCapPortaPalletsB20:   55_200,
+      caLcbCapBlueBoxB10:        8_000,
+      caLcbCapBlueBoxB20:        8_000,
+      caLcbCapBlueBoxIndividual: 4_200,
+      caLcbCapBlocado:           19_800,
+      caLcbCapTMX:               8_000,
+      caSafetyMargin:            10,
     };
-    Object.entries(defaults).forEach(([id, v]) => {
+    // Valores padrão para Ocupadas por Tipo
+    const occDefaults = {
+      caCapPortaPalletsB10:   37_400,
+      caCapPortaPalletsB20:   30_600,
+      caCapBlueBoxB10:        8_000,
+      caCapBlueBoxB20:        8_000,
+      caCapBlueBoxIndividual: 4_200,
+      caCapBlocado:           19_800,
+      caCapTMX:               0,
+      caVolumeFuturo:         0,
+    };
+    Object.entries({ ...capDefaults, ...occDefaults }).forEach(([id, v]) => {
       const e = el(id);
       if (e) e.value = v;
     });
@@ -1513,19 +1719,29 @@ function initAnalise() {
     runLocalCACalculation();
   });
 
-  [
-    "caLcbCapacity", "caCurrentOccupation", "caAnalysisPeriod", "caSafetyMargin",
-    "caCapBlocado",
+  // IDs dos campos de Capacidade LCB
+  const capIds = [
+    "caLcbCapPortaPalletsB10", "caLcbCapPortaPalletsB20",
+    "caLcbCapBlueBoxB10",      "caLcbCapBlueBoxB20",
+    "caLcbCapBlueBoxIndividual","caLcbCapBlocado",
+    "caLcbCapTMX",
+    "caSafetyMargin",
+  ];
+
+  // IDs dos campos de Ocupadas por Tipo
+  const occIds = [
     "caCapPortaPalletsB10", "caCapPortaPalletsB20",
     "caCapBlueBoxB10",      "caCapBlueBoxB20",
-    "caCapBlueBoxIndividual",
-    "caCapTMX",
-    "caVolumeFuturo",
-  ].forEach(id => {
+    "caCapBlueBoxIndividual","caCapBlocado",
+    "caCapTMX",             "caVolumeFuturo",
+  ];
+
+  [...capIds, ...occIds].forEach(id => {
     el(id)?.addEventListener("input", () => {
       syncZoneCapacitiesFromInputs();
-      // Sempre que mudar volume atual ou ocupação, atualiza contexto do overlay
       _syncFutureVolumeContext();
+      // Recalcula e atualiza disponíveis em tempo real
+      calcAndRenderZoneDisponivel();
       if (el("caResultCards")?.style.display !== "none") handleCalcClick();
     });
   });
@@ -1536,6 +1752,9 @@ function initAnalise() {
 
   function applyFile(file) {
     if (!file) return;
+    // Novo arquivo → reseta calibração da timeline para o próximo cálculo
+    State._timelineCalibrated = false;
+    State._activePeriods      = null;
     uploadZone?.classList.remove("upload-error");
     uploadZone?.classList.add("file-loaded");
     if (uploadLabel) {
@@ -1575,12 +1794,13 @@ function initAnalise() {
 function init() {
   try {
     initMenu();
-    initProjectFilter();
     initDrawer();
     initAnalise();
     initMapControls();
 
+    // Sincroniza zonas e renderiza disponíveis na carga inicial
     syncZoneCapacitiesFromInputs();
+    calcAndRenderZoneDisponivel();
 
     const defaultRates = {};
     Object.entries(ZONE_DATA).forEach(([id, z]) => { defaultRates[id] = z.baseOcc; });
@@ -1597,7 +1817,7 @@ function init() {
     });
 
     showPage("analise");
-    console.info("[LCB] v7.4 — Ocupação futura por zona integrada");
+    console.info("[LCB] v8.0 — Capacidade e ocupação calculadas por zona");
   } catch (err) {
     console.error("[LCB] Erro na inicialização:", err);
   }

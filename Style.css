@@ -1668,3 +1668,538 @@ ul[role="list"] { list-style: none; }
 .zo-popup-float .zo-popup__body::-webkit-scrollbar-thumb {
   background: var(--popup-primary);
 }
+
+/* ==========================================================================
+   PATCH v8.0 — Disponível por zona (subtração automática)
+========================================================================== */
+
+/* Label de disponível calculado automaticamente abaixo de cada input de ocupação */
+.ca-field__disp {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-ok);
+  margin-top: 2px;
+  letter-spacing: .01em;
+  transition: color 0.2s ease;
+  min-height: 16px;
+}
+
+/* Garante que campos de Capacidade LCB tenham visual diferenciado */
+#caLcbCapPortaPalletsB10,
+#caLcbCapPortaPalletsB20,
+#caLcbCapBlueBoxB10,
+#caLcbCapBlueBoxB20,
+#caLcbCapBlueBoxIndividual,
+#caLcbCapBlocado,
+#caLcbCapTMX,
+#caLcbVolumeFuturo {
+  background: var(--color-brand-050);
+  border-color: var(--color-brand-200);
+  font-weight: 600;
+  color: var(--color-brand-700);
+}
+
+#caLcbCapPortaPalletsB10:focus,
+#caLcbCapPortaPalletsB20:focus,
+#caLcbCapBlueBoxB10:focus,
+#caLcbCapBlueBoxB20:focus,
+#caLcbCapBlueBoxIndividual:focus,
+#caLcbCapBlocado:focus,
+#caLcbCapTMX:focus,
+#caLcbVolumeFuturo:focus {
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgba(18,59,112,.12);
+  background: #fff;
+}
+
+/* ==========================================================================
+   LCB Style Patch — v8.1
+   Cole este bloco no FINAL do Style.css
+========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Disponível por zona — label colorido abaixo de cada input de Ocupadas
+-------------------------------------------------------------------------- */
+.ca-field__disp {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  margin-top: 3px;
+  letter-spacing: .01em;
+  transition: color 0.2s ease;
+  min-height: 16px;
+  color: #16a34a; /* default: verde; JS sobrescreve via style */
+}
+
+/* --------------------------------------------------------------------------
+   Inputs de Capacidade LCB — visual diferenciado (azul claro)
+-------------------------------------------------------------------------- */
+#caLcbCapPortaPalletsB10,
+#caLcbCapPortaPalletsB20,
+#caLcbCapBlueBoxB10,
+#caLcbCapBlueBoxB20,
+#caLcbCapBlueBoxIndividual,
+#caLcbCapBlocado,
+#caLcbCapTMX {
+  background: #eef4fb;
+  border-color: #8fb7f0;
+  font-weight: 600;
+  color: #123b70;
+}
+
+#caLcbCapPortaPalletsB10:focus,
+#caLcbCapPortaPalletsB20:focus,
+#caLcbCapBlueBoxB10:focus,
+#caLcbCapBlueBoxB20:focus,
+#caLcbCapBlueBoxIndividual:focus,
+#caLcbCapBlocado:focus,
+#caLcbCapTMX:focus {
+  border-color: #1a4d8f;
+  box-shadow: 0 0 0 3px rgba(18,59,112,.12);
+  background: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Controle do mapa — bloco direito com Vol. Atual + Vol. Futuro lado a lado
+-------------------------------------------------------------------------- */
+.ca-map-control-item--right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* Separador → entre Vol. Atual e Vol. Futuro */
+.ca-map-vol-sep {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  flex-shrink: 0;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+/* Input de Volume Atual — mais estreito, tom neutro */
+.ca-map-production-input--atual {
+  width: 60px;
+  color: #475569;
+  border-color: #e2e8f0;
+  font-weight: 600;
+}
+
+.ca-map-production-input--atual:focus {
+  border-color: #1a4d8f;
+  box-shadow: 0 0 0 3px rgba(18,59,112,.10);
+}
+
+/* Responsivo: empilha em telas pequenas */
+@media (max-width: 768px) {
+  .ca-map-control-item--right {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ca-map-vol-sep { display: none; }
+}
+
+/* ==========================================================================
+   PATCH — MULTI-PROJECT DROPDOWN (MPD)
+   Cole este bloco no FINAL do Style.css
+========================================================================== */
+
+.mpd-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.mpd-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.mpd-trigger:hover { border-color: var(--color-brand-400); }
+.mpd-trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgba(18,59,112,.10);
+}
+.mpd-trigger[aria-expanded="true"] {
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgba(18,59,112,.10);
+}
+.mpd-trigger__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.mpd-trigger--has-selection .mpd-trigger__text {
+  color: var(--color-brand-900);
+  font-weight: 600;
+}
+.mpd-trigger__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+.mpd-trigger[aria-expanded="true"] .mpd-trigger__chevron {
+  transform: rotate(180deg);
+}
+
+/* Painel — CRÍTICO: display:none quando [hidden], block quando visível */
+.mpd-panel[hidden] { display: none !important; }
+.mpd-panel {
+  display: block;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: mpd-open 0.14s ease forwards;
+}
+@keyframes mpd-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mpd-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-brand-900);
+}
+.mpd-panel__title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.6);
+}
+.mpd-panel__clear {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: rgba(255,255,255,.5);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.mpd-panel__clear:hover { color: #fff; background: rgba(255,255,255,.12); }
+
+.mpd-list {
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-brand-200) transparent;
+}
+.mpd-list::-webkit-scrollbar       { width: 5px; }
+.mpd-list::-webkit-scrollbar-track { background: transparent; }
+.mpd-list::-webkit-scrollbar-thumb { background: var(--color-brand-200); border-radius: 99px; }
+
+.mpd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+  outline: none;
+}
+.mpd-item:hover        { background: var(--color-brand-050); }
+.mpd-item:focus-visible{ background: var(--color-brand-100); }
+.mpd-item--selected    { background: var(--color-brand-050); }
+
+.mpd-item__check {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.mpd-item__check svg { opacity: 0; color: #fff; transition: opacity var(--transition-fast); }
+.mpd-item--selected .mpd-item__check { background: var(--color-brand-900); border-color: var(--color-brand-900); }
+.mpd-item--selected .mpd-item__check svg { opacity: 1; }
+.mpd-item--selected .mpd-item__label { font-weight: 700; color: var(--color-brand-900); }
+
+.mpd-item__dot {
+  width: 10px; height: 10px; border-radius: 3px;
+  flex-shrink: 0; border: 1px solid rgba(0,0,0,.10);
+}
+.mpd-item__label {
+  flex: 1; font-size: var(--text-sm); font-weight: 500;
+  color: var(--color-text); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.mpd-item__meta {
+  font-size: var(--text-xs); color: var(--color-text-subtle);
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.mpd-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg);
+}
+.mpd-panel__count {
+  font-size: var(--text-xs); font-weight: 600; color: var(--color-text-muted);
+}
+.mpd-panel__apply {
+  padding: 6px 16px;
+  background: var(--color-brand-900); color: #fff;
+  border: none; border-radius: 6px;
+  font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 700;
+  cursor: pointer; transition: background var(--transition-fast);
+}
+.mpd-panel__apply:hover { background: var(--color-brand-700); }
+
+/* Responsivo — sobe do rodapé em mobile */
+@media (max-width: 768px) {
+  .mpd-panel {
+    position: fixed;
+    left: 12px; right: 12px;
+    top: auto; bottom: 0;
+    border-radius: 12px 12px 0 0;
+    max-height: 70vh;
+  }
+  .mpd-list { max-height: 45vh; }
+}
+
+/* ==========================================================================
+   LCB Style Patch — v8.1
+   Cole este bloco no FINAL do Style.css
+========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Disponível por zona — label colorido abaixo de cada input de Ocupadas
+-------------------------------------------------------------------------- */
+.ca-field__disp {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  margin-top: 3px;
+  letter-spacing: .01em;
+  transition: color 0.2s ease;
+  min-height: 16px;
+  color: #16a34a; /* default: verde; JS sobrescreve via style */
+}
+
+/* --------------------------------------------------------------------------
+   Inputs de Capacidade LCB — visual diferenciado (azul claro)
+-------------------------------------------------------------------------- */
+#caLcbCapPortaPalletsB10,
+#caLcbCapPortaPalletsB20,
+#caLcbCapBlueBoxB10,
+#caLcbCapBlueBoxB20,
+#caLcbCapBlueBoxIndividual,
+#caLcbCapBlocado,
+#caLcbCapTMX {
+  background: #eef4fb;
+  border-color: #8fb7f0;
+  font-weight: 600;
+  color: #123b70;
+}
+
+#caLcbCapPortaPalletsB10:focus,
+#caLcbCapPortaPalletsB20:focus,
+#caLcbCapBlueBoxB10:focus,
+#caLcbCapBlueBoxB20:focus,
+#caLcbCapBlueBoxIndividual:focus,
+#caLcbCapBlocado:focus,
+#caLcbCapTMX:focus {
+  border-color: #1a4d8f;
+  box-shadow: 0 0 0 3px rgba(18,59,112,.12);
+  background: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Controle do mapa — bloco direito com Vol. Atual + Vol. Futuro lado a lado
+-------------------------------------------------------------------------- */
+.ca-map-control-item--right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* Separador → entre Vol. Atual e Vol. Futuro */
+.ca-map-vol-sep {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  flex-shrink: 0;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+/* Input de Volume Atual — mais estreito, tom neutro */
+.ca-map-production-input--atual {
+  width: 60px;
+  color: #475569;
+  border-color: #e2e8f0;
+  font-weight: 600;
+}
+
+.ca-map-production-input--bold {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--color-brand-900);
+}
+
+.ca-map-production-input--atual:focus {
+  border-color: #1a4d8f;
+  box-shadow: 0 0 0 3px rgba(18,59,112,.10);
+}
+
+/* Responsivo: empilha em telas pequenas */
+@media (max-width: 768px) {
+  .ca-map-control-item--right {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ca-map-vol-sep { display: none; }
+}
+
+/* ==========================================================================
+   LCB Style Patch — v8.1
+   Cole este bloco no FINAL do Style.css
+========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Disponível por zona — label colorido abaixo de cada input de Ocupadas
+-------------------------------------------------------------------------- */
+.ca-field__disp {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  margin-top: 3px;
+  letter-spacing: .01em;
+  transition: color 0.2s ease;
+  min-height: 16px;
+  color: #16a34a; /* default: verde; JS sobrescreve via style */
+}
+
+/* --------------------------------------------------------------------------
+   Inputs de Capacidade LCB — sem destaque de cor
+-------------------------------------------------------------------------- */
+#caLcbCapPortaPalletsB10,
+#caLcbCapPortaPalletsB20,
+#caLcbCapBlueBoxB10,
+#caLcbCapBlueBoxB20,
+#caLcbCapBlueBoxIndividual,
+#caLcbCapBlocado,
+#caLcbCapTMX {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+#caLcbCapPortaPalletsB10:focus,
+#caLcbCapPortaPalletsB20:focus,
+#caLcbCapBlueBoxB10:focus,
+#caLcbCapBlueBoxB20:focus,
+#caLcbCapBlueBoxIndividual:focus,
+#caLcbCapBlocado:focus,
+#caLcbCapTMX:focus {
+  border-color: #1a4d8f;
+  box-shadow: 0 0 0 3px rgba(18,59,112,.10);
+  background: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Controle do mapa — bloco direito com Vol. Atual + Vol. Futuro lado a lado
+-------------------------------------------------------------------------- */
+.ca-map-control-item--right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* Separador → entre Vol. Atual e Vol. Futuro */
+.ca-map-vol-sep {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  flex-shrink: 0;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+/* Input de Volume Atual — mais estreito, tom neutro */
+.ca-map-production-input--atual {
+  width: 60px;
+  color: #475569;
+  border-color: #e2e8f0;
+  font-weight: 600;
+}
+
+.ca-map-production-input--bold {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--color-brand-900);
+}
+
+.ca-map-production-input--atual:focus {
+  border-color: #1a4d8f;
+  box-shadow: 0 0 0 3px rgba(18,59,112,.10);
+}
+
+/* Responsivo: empilha em telas pequenas */
+@media (max-width: 768px) {
+  .ca-map-control-item--right {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ca-map-vol-sep { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Crédito de desenvolvimento no sidebar
+-------------------------------------------------------------------------- */
+.sidebar-footer-credit {
+  font-size: 0.625rem;
+  color: rgba(255,255,255,.25);
+  padding: 4px 14px 8px;
+  letter-spacing: .02em;
+}
+.sidebar-footer-credit strong {
+  color: rgba(255,255,255,.4);
+  font-weight: 600;
+}
