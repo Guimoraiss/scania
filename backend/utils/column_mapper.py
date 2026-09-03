@@ -1,6 +1,6 @@
 """
 LCB Capacity Analytics
-utils/column_mapper.py  (v3 — revisão integrada)
+utils/column_mapper.py  (v4 — novas colunas adicionadas)
 
 Mapeia colunas do arquivo para campos canônicos usando:
   1. Match exato normalizado
@@ -20,7 +20,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 FIELD_DEFINITIONS: dict[str, tuple[bool, list[str]]] = {
-    # Obrigatório — identificador da peça (suporta 'pn' E 'part_number' como alias)
+    # Obrigatório — identificador da peça
     "part_number": (True, [
         "part number", "part_number", "partnumber", "pn",
         "codigo", "código", "item", "numero peca", "número peça",
@@ -56,10 +56,49 @@ FIELD_DEFINITIONS: dict[str, tuple[bool, list[str]]] = {
         "caixas/periodo", "boxes/period", "cxs_periodo",
     ]),
 
-    # Campos extras presentes em outros formatos de arquivo (opcionais)
+    # -----------------------------------------------------------------------
+    # Colunas novas identificadas no Excel
+    # -----------------------------------------------------------------------
+
+    "volume_anual": (False, [
+        "volume anual", "volume_anual", "vol anual", "vol. anual",
+        "annual volume", "volume/ano",
+    ]),
+
+    "qtd_pcs_cx": (False, [
+        "qtd de pcs/cx", "qtd pcs/cx", "qtd de pcs cx",
+        "qtd_pcs_cx", "pcs/cx", "pecas por caixa", "peças por caixa",
+        "qty pcs/box", "qty per box", "pcs per box",
+    ]),
+
+    "qtd_cxs_ano": (False, [
+        "qtd cxs/ano", "qtd_cxs_ano", "caixas/ano",
+        "boxes/year", "qty cxs/ano",
+    ]),
+
+    "qtd_cxs_dia": (False, [
+        "qtd cxs/dia", "qtd_cxs_dia", "caixas/dia",
+        "boxes/day", "qty cxs/dia", "consumo diario caixas",
+    ]),
+
+    "origem": (False, [
+        "origem", "origin", "procedencia", "procedência",
+        "fonte", "source",
+    ]),
+
+    "dias_periodo": (False, [
+        "dias do periodo", "dias do período", "dias_periodo",
+        "dias periodo", "days period", "days of period",
+        "periodo em dias", "período em dias",
+    ]),
+
+    # -----------------------------------------------------------------------
+    # Campos extras de outros formatos (mantidos da v3)
+    # -----------------------------------------------------------------------
+
     "qtde_pns_por_caixa": (False, [
         "qtde pns/caixa", "qtde_pns", "pns/caixa",
-        "qty/box", "qty per box", "quantidade por caixa",
+        "qty/box", "quantidade por caixa",
     ]),
     "daily_rate": (False, [
         "daily rate", "daily_rate", "taxa diaria",
@@ -67,6 +106,13 @@ FIELD_DEFINITIONS: dict[str, tuple[bool, list[str]]] = {
     ]),
     "volume_contratado": (False, [
         "volume contratado", "volume_contratado", "contratado",
+    ]),
+    "bloqueado": (False, [
+        "bloqueado", "bloq", "bloq_code", "blocked", "bloquado",
+    ]),
+    "valor_total": (False, [
+        "valor total", "valor_total", "total value", "valor estoque",
+        "mu", "mu_total",
     ]),
 }
 

@@ -1,11 +1,13 @@
 """
 LCB Capacity Analytics
-schemas/excel_schema.py  (v4 — capacity/zones integrado)
+schemas/excel_schema.py  (v5 — novos campos do Excel adicionados)
 
-Novos schemas adicionados:
-  - ZoneOccupancy       : ocupação real de uma zona (do dashboard LCB)
-  - ZonesResponse       : resposta de GET /capacity/zones
-  - ZoneRiskLevel       : nível de risco por zona (alinhado ao risk_classifier)
+Novos campos em ProjFuturoItem:
+  - volume_anual   : Volume Anual
+  - qtd_pcs_cx     : Qtd de Pcs/Cx
+  - qtd_cxs_ano    : Qtd Cxs/Ano
+  - qtd_cxs_dia    : Qtd Cxs/Dia
+  - dias_periodo   : Dias do Período
 """
 
 from __future__ import annotations
@@ -40,11 +42,18 @@ class ProjFuturoItem(BaseModel):
         description="Fonte: cxs_periodo | daily_rate | contratado_proporcional | sem_dado.",
     )
 
-    # Novos campos do dashboard (v4)
+    # Campos dashboard (v4)
     bloqueado: Optional[float] = Field(None, ge=0, description="Qtde bloqueada (BLOQ_CODE).")
     origem: str = Field("", description="Origem: IMPORTADO | NACIONAL.")
     valor_total: Optional[float] = Field(None, ge=0, description="Valor total do estoque (MU).")
     volume_contratado: Optional[float] = Field(None, ge=0, description="Capacidade total da zona (STORE).")
+
+    # Campos novos do Excel (v5)
+    volume_anual: Optional[float] = Field(None, ge=0, description="Volume Anual.")
+    qtd_pcs_cx: Optional[float] = Field(None, ge=0, description="Qtd de Pcs/Cx (peças por caixa).")
+    qtd_cxs_ano: Optional[float] = Field(None, ge=0, description="Qtd Cxs/Ano (caixas por ano).")
+    qtd_cxs_dia: Optional[float] = Field(None, ge=0, description="Qtd Cxs/Dia (caixas por dia).")
+    dias_periodo: Optional[float] = Field(None, ge=0, description="Dias do Período.")
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +69,7 @@ class ProjetoSummary(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Ocupação por zona — NOVO (v4)
+# Ocupação por zona — v4
 # ---------------------------------------------------------------------------
 
 class ZoneRiskLevel(str):

@@ -1,9 +1,11 @@
 """
 LCB Capacity Analytics
-utils/sheet_detector.py  (v3 — revisão integrada)
+utils/sheet_detector.py  (v4 — prioridade de aba por nome)
 
 Detecta automaticamente:
-  - Qual aba contém a tabela de peças (maior densidade de keywords canônicas)
+  - Qual aba contém a tabela de peças:
+      1. Prioriza abas com nome conhecido (PRIORITY_SHEET_NAMES)
+      2. Fallback: maior densidade de keywords canônicas
   - Qual linha é o cabeçalho real (ignora linhas de título/merge)
 """
 
@@ -17,6 +19,16 @@ SHEET_SIGNAL_KEYWORDS = [
     "part number", "pn", "description", "descrição",
     "pckg", "storage zone", "projeto", "project",
     "cxs/periodo", "introduction date",
+]
+
+# Abas que sempre devem ser priorizadas quando existirem no arquivo
+# (ordem importa — a primeira encontrada vence)
+PRIORITY_SHEET_NAMES = [
+    "máscara cálculo (exemplo)",
+    "mascara calculo (exemplo)",
+    "máscara calculo",
+    "mascara calculo",
+    "exemplo final",
 ]
 
 MAX_HEADER_SCAN_ROWS = 25
@@ -46,7 +58,21 @@ def _score_sheet(xl: pd.ExcelFile, sheet_name: str) -> float:
 
 
 def detect_best_sheet(xl: pd.ExcelFile) -> str:
-    """Retorna o nome da aba mais provável para conter os dados de peças."""
+    """
+    Retorna o nome da aba a ser lida.
+
+    Prioridade:
+      1. Primeira aba cujo nome esteja em PRIORITY_SHEET_NAMES
+      2. Fallback: aba com maior score de keywords
+    """
+    norm_sheet_names = {_normalize(s): s for s in xl.sheet_names}
+
+    # 1. Prioridade por nome
+    for priority in PRIORITY_SHEET_NAMES:
+        if _normalize(priority) in norm_sheet_names:
+            return norm_sheet_names[_normalize(priority)]
+
+    # 2. Fallback: maior score
     scores = {s: _score_sheet(xl, s) for s in xl.sheet_names}
     return max(scores, key=lambda s: scores[s])
 
