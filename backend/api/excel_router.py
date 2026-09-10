@@ -1,4 +1,3 @@
-
 """
 LCB Capacity Analytics
 api/excel_router.py
@@ -10,6 +9,7 @@ Endpoints:
   GET  /excel/cache/status
   POST /excel/simulate
   POST /excel/project/simulate
+  GET  /excel/origem-distribution   ← NOVO
 
 O último upload é armazenado em dois locais:
 
@@ -24,6 +24,8 @@ os mesmos itens dentro do processo FastAPI.
 """
 
 from __future__ import annotations
+
+from collections import defaultdict
 
 from fastapi import (
     APIRouter,
@@ -336,3 +338,115 @@ async def simulate_alias(
     req: SimulacaoRequest,
 ) -> SimulacaoResponse:
     return await simulate(req)
+
+
+# ---------------------------------------------------------------------------
+# GET /excel/origem-distribution
+# ---------------------------------------------------------------------------
+
+# Lead times em dias por origem — fonte do negócio
+_LEAD_TIME: dict[str, int] = {
+    "Nacional":  9,
+    "Importado": 15,
+    "China":     25,
+}
+
+_ORIGENS_VALIDAS: set[str] = set(_LEAD_TIME.keys())
+
+
+def _read_field(item: object, *keys: str) -> str:
+    """Lê um campo de um Pydantic model ou dict, tentando várias chaves."""
+    for key in keys:
+        # Pydantic / dataclass
+        value = getattr(item, key, None)
+        if value is not None:
+            return str(value).strip()
+        # dict
+        if isinstance(item, dict):
+            value = item.get(key)
+            if value is not None:
+                return str(value).strip()
+    return ""
+
+
+@router.get(
+    "/origem-distribution",
+    summary="Distribuição de itens por origem (Nacional / Importado / China) agrupada por projeto",
+    description=(
+        "Lê os itens do último upload já em cache e agrupa por projeto + coluna 'Origem'. "
+        "Retorna contagens, percentuais e lead times para alimentar o gráfico de barras no frontend."
+    ),
+)
+async def origem_distribution(
+    request: Request,
+) -> JSONResponse:
+    items = _get_state_items(request)
+
+    if not items:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhum arquivo carregado ainda.",
+        )
+
+    # -----------------------------------------------------------------------
+    # Agrupa: { projeto: { origem: count } }
+    # -----------------------------------------------------------------------
+    grupos: dict[str, dict[str, int]] = defaultdict(
+        lambda: {o: 0 for o in _ORIGENS_VALIDAS}
+    )
+
+    sem_origem = 0
+
+    for item in items:
+        projeto = _read_field(item, "projeto", "project") or "Sem projeto"
+        origem  = _read_field(item, "origem", "origin")
+
+        if origem in _ORIGENS_VALIDAS:
+            grupos[projeto][origem] += 1
+        else:
+            sem_origem += 1
+
+    # -----------------------------------------------------------------------
+    # Monta lista plana para o frontend
+    # -----------------------------------------------------------------------
+    distribuicao: list[dict] = []
+
+    for projeto, contagens in grupos.items():
+        total_projeto = sum(contagens.values())
+        for origem, count in contagens.items():
+            if count == 0:
+                continue
+            distribuicao.append({
+                "project":        projeto,
+                "origem":         origem,
+                "count":          count,
+                "pct":            round(count / total_projeto * 100, 1) if total_projeto else 0.0,
+                "lead_time_dias": _LEAD_TIME[origem],
+            })
+
+    # -----------------------------------------------------------------------
+    # Totais globais (independentes de projeto)
+    # -----------------------------------------------------------------------
+    totais_count: dict[str, int] = {o: 0 for o in _ORIGENS_VALIDAS}
+    for d in distribuicao:
+        totais_count[d["origem"]] += d["count"]
+
+    total_geral = sum(totais_count.values())
+
+    totais = {
+        origem: {
+            "count":          count,
+            "pct":            round(count / total_geral * 100, 1) if total_geral else 0.0,
+            "lead_time_dias": _LEAD_TIME[origem],
+        }
+        for origem, count in totais_count.items()
+    }
+
+    return JSONResponse(
+        content={
+            "distribuicao":  distribuicao,
+            "totais":        totais,
+            "total_itens":   total_geral,
+            "sem_origem":    sem_origem,   # itens sem origem mapeada (debug)
+        }
+    )

@@ -1,12 +1,8 @@
 "use strict";
 
 /* ==========================================================================
-   LCB Capacity Analytics — zones-overlay.js v8.2
-   Fórmula de ocupação futura por zona:
-     Ocup.Futura_cx  = Ocup.Hoje_cx × (ProdFutura / ProdHoje)
-     Ocup.Futura_%   = Ocup.Futura_cx / Capacidade_zona × 100
-   _state.volumeAtual  = Produção Hoje   (veíc./dia — campo "Vol. Atual")
-   _state.volumeFuturo = Produção Futura (veíc./dia — campo "Vol. Futuro")
+   LCB Capacity Analytics — zones-overlay.js v9.2
+   Visual mais sóbrio + bloco de impacto PD na aba Situação Atual.
 ========================================================================== */
 
 const OVERLAY_ZONES = {
@@ -57,8 +53,8 @@ const _state = {
   selectedProject: null,
   thresholdMedium: 70,
   thresholdHigh:   90,
-  volumeAtual:  0,   // Produção Hoje   (veíc./dia)
-  volumeFuturo: 0,   // Produção Futura (veíc./dia)
+  volumeAtual:  0,
+  volumeFuturo: 0,
   zoneCurrentOccupied: {},
 };
 
@@ -84,37 +80,25 @@ function _num(item, keys) {
 }
 function _fmtCx(v)    { return `${Number(v ?? 0).toLocaleString("pt-BR")} cx`; }
 function _fmtVeic(v)  { return `${Number(v ?? 0).toLocaleString("pt-BR")} veíc./dia`; }
-function _fmtMaybe(v) { if (v == null) return "Não informado"; const n = Number(v); return Number.isFinite(n) ? _fmtCx(n) : "Não informado"; }
+function _fmtMaybe(v) { if (v == null) return "—"; const n = Number(v); return Number.isFinite(n) ? _fmtCx(n) : "—"; }
 
 function _periodKey(raw) {
   if (!raw) return null;
   const s = String(raw).trim();
   const n = _norm(s);
-
   const MON = { JAN:1,FEV:2,MAR:3,ABR:4,MAI:5,JUN:6,JUL:7,AGO:8,SET:9,OUT:10,NOV:11,DEZ:12 };
-
-  // "JUL/2028" ou "JUL 2028" ou "JUL-2028" (com ou sem espaço)
   let m = n.match(/^(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)[\/\-\s]*(19\d{2}|20\d{2})$/);
   if (m) return +m[2] * 12 + MON[m[1]];
-
-  // "2028/JUL" ou "2028-JUL"
   m = n.match(/^(19\d{2}|20\d{2})[\/\-\s]*(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)$/);
   if (m) return +m[1] * 12 + MON[m[2]];
-
-  // "Q1/2028" ou "Q1 2028"
   m = n.match(/^Q([1-4])[\/\-\s]*(19\d{2}|20\d{2})$/);
   if (m) return +m[2] * 12 + +m[1] * 3;
-
-  // "2028/Q1"
   m = n.match(/^(19\d{2}|20\d{2})[\/\-\s]*Q([1-4])$/);
   if (m) return +m[1] * 12 + +m[2] * 3;
-
-  // Formatos numéricos: 2028-07, 07/2028
   m = n.match(/^(19\d{2}|20\d{2})[\/\-](\d{1,2})$/);
   if (m && +m[2] >= 1 && +m[2] <= 12) return +m[1] * 12 + +m[2];
   m = n.match(/^(\d{1,2})[\/\-](19\d{2}|20\d{2})$/);
   if (m && +m[1] >= 1 && +m[1] <= 12) return +m[2] * 12 + +m[1];
-
   const d = new Date(s);
   if (!isNaN(d)) return d.getFullYear() * 12 + d.getMonth() + 1;
   return null;
@@ -145,13 +129,9 @@ const _desc  = i => _txt(i, ["descricao","desc","description","DESCRICAO"]);
 const _pe    = i => _txt(i, ["pe","PE","pckg_type","pckgType"]);
 const _intro = i => _txt(i, ["introduction_date","introductionDate","intro_date","introDate","data_intro"]);
 const _vol   = i => _num(i, ["volume_calculado_periodo","calc","cxs_periodo","volC","volume_contratado","volume"]);
-const _blk   = i => _num(i, ["bloqueado","blocked","slots_bloqueados","bloq_code"]);
 const _dr    = i => _num(i, ["daily_rate","dailyRate","dr","DR"]);
 
 function _physicalCapacity(zoneName) {
-  /* Lê a capacidade diretamente dos inputs "Capacidade LCB"
-     para garantir que o overlay sempre reflete o que o usuário configurou.
-     Fallback para defaultCapacity caso o campo não exista. */
   const ids = {
     "Base 10":             "caLcbCapPortaPalletsB10",
     "Base 20":             "caLcbCapPortaPalletsB20",
@@ -164,8 +144,6 @@ function _physicalCapacity(zoneName) {
   const id  = ids[zoneName];
   const raw = id ? Number(document.getElementById(id)?.value) : NaN;
   if (Number.isFinite(raw) && raw > 0) return raw;
-
-  // fallback: defaultCapacity do OVERLAY_ZONES
   return Number(OVERLAY_ZONES[zoneName]?.defaultCapacity) || 0;
 }
 
@@ -187,38 +165,21 @@ function _inputCurrentOccupied(zoneName) {
 }
 
 /* ==========================================================================
-   CÁLCULO DE OCUPAÇÃO FUTURA POR ZONA — v8.2
-   Fórmula:
-     Ocup.Futura_cx = Ocup.Hoje_cx × (ProdFutura / ProdHoje)
-     Ocup.Futura_%  = Ocup.Futura_cx / Capacidade × 100
-
-   _state.volumeAtual  = Produção Hoje   (veíc./dia)
-   _state.volumeFuturo = Produção Futura (veíc./dia)
-   currentOccupied     = Ocup.Hoje em caixas (por zona)
-   introVolume         = volume de introduções do Excel até o período
+   CÁLCULO DE OCUPAÇÃO FUTURA
 ========================================================================== */
 function _calcOcupacaoFutura(currentOccupied, introVolume, capacity) {
   const prodHoje   = Number(_state.volumeAtual)  || 0;
   const prodFutura = Number(_state.volumeFuturo) || 0;
-
   if (prodHoje <= 0 || capacity <= 0) return null;
-
-  const fator = prodFutura / prodHoje;
-
-  // Ocup. base projetada: escala a ocupação atual pela razão de produção
-  const baseProjected = Math.max(0, currentOccupied * fator);
-
-  // Adiciona introduções do Excel (volume novo de PD no período)
+  const fator             = prodFutura / prodHoje;
+  const baseProjected     = Math.max(0, currentOccupied * fator);
   const projectedOccupied = Math.max(0, baseProjected + Math.max(0, introVolume));
-
-  // % de ocupação futura
-  const futurePct = (projectedOccupied / capacity) * 100;
-
+  const futurePct         = (projectedOccupied / capacity) * 100;
   return { fator, baseProjected, introVolume: Math.max(0, introVolume), projectedOccupied, futurePct };
 }
 
 /* ==========================================================================
-   SEVERIDADE / COR
+   SEVERIDADE
 ========================================================================== */
 function _sev(pct) {
   if (pct == null || !Number.isFinite(+pct)) return "none";
@@ -226,23 +187,24 @@ function _sev(pct) {
   if (+pct >= 70) return "medium";
   return "low";
 }
-function _sevColor(sev) {
-  return sev === "high" ? "#dc2626" : sev === "medium" ? "#d97706" : sev === "low" ? "#16a34a" : "#94a3b8";
-}
-function _sevLabel(sev) {
-  return sev === "high" ? "Crítico" : sev === "medium" ? "Atenção" : sev === "low" ? "Disponível" : "Sem dados";
-}
-function _sevBg(sev) {
-  return sev === "high" ? "#fef2f2" : sev === "medium" ? "#fffbeb" : sev === "low" ? "#f0fdf4" : "#f8fafc";
-}
-function _sevBorder(sev) {
-  return sev === "high" ? "#fecaca" : sev === "medium" ? "#fde68a" : sev === "low" ? "#bbf7d0" : "#e2e8f0";
-}
-function _sevHeaderGradient(sev) {
-  if (sev === "high")   return "linear-gradient(135deg, #991b1b, #dc2626)";
-  if (sev === "medium") return "linear-gradient(135deg, #92400e, #d97706)";
-  if (sev === "low")    return "linear-gradient(135deg, #166534, #16a34a)";
-  return "linear-gradient(135deg, #1a4d8f, #2563a8)";
+
+const SEV = {
+  low:    { fg: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", label: "Disponível" },
+  medium: { fg: "#d97706", bg: "#fffbeb", border: "#fde68a", label: "Atenção"    },
+  high:   { fg: "#dc2626", bg: "#fef2f2", border: "#fecaca", label: "Crítico"    },
+  none:   { fg: "#64748b", bg: "#f8fafc", border: "#e2e8f0", label: "Sem dados"  },
+};
+
+function _sevCfg(pct) { return SEV[_sev(pct)] ?? SEV.none; }
+
+function _headerGradient(sev) {
+  const g = {
+    low:    "linear-gradient(120deg,#166534,#16a34a)",
+    medium: "linear-gradient(120deg,#92400e,#d97706)",
+    high:   "linear-gradient(120deg,#991b1b,#dc2626)",
+    none:   "linear-gradient(120deg,#1e3a5f,#2563a8)",
+  };
+  return g[sev] ?? g.none;
 }
 
 /* ==========================================================================
@@ -250,20 +212,12 @@ function _sevHeaderGradient(sev) {
 ========================================================================== */
 function aggregateByZone(items, opts = {}) {
   const projFilter = opts.project && _norm(opts.project) !== "TODOS" ? _norm(opts.project) : null;
-
-  // Se selectedPeriod foi passado: tenta parsear.
-  // Se parsear falhou (formato inesperado): usa null = sem filtro de data (mostra tudo).
-  // Se selectedPeriod não foi passado (undefined/null): também sem filtro.
-  // O fallback de "pegar máximo" foi removido — interferia na timeline.
   let selKey = null;
-  if (opts.selectedPeriod) {
-    selKey = _periodKey(opts.selectedPeriod);
-    // Se não conseguiu parsear, trata como "mostrar tudo" (selKey = null)
-  }
+  if (opts.selectedPeriod) selKey = _periodKey(opts.selectedPeriod);
 
   const groups = {};
   for (const z of ZONE_ORDER) {
-    groups[z] = { pns: new Set(), details: [], count: 0, introVolume: 0, blocked: 0, dr: 0 };
+    groups[z] = { pns: new Set(), details: [], count: 0, introVolume: 0, dr: 0 };
   }
 
   for (const it of items || []) {
@@ -275,21 +229,13 @@ function aggregateByZone(items, opts = {}) {
     const pn       = _pn(it);
     const introKey = _periodKey(_intro(it));
     const vol      = Math.max(0, _vol(it));
-    const blocked  = Math.max(0, _blk(it));
     const dr       = _dr(it);
-
-    // Filtro da timeline:
-    // - selKey null → mostra tudo
-    // - introKey null → item sem data → sempre inclui
-    // - introKey <= selKey → introduzido até o período selecionado
-    const visibleInTimeline = selKey === null || introKey === null || introKey <= selKey;
-
-    if (!visibleInTimeline) continue; // ← pula o item inteiro se fora do período
+    const visible  = selKey === null || introKey === null || introKey <= selKey;
+    if (!visible) continue;
 
     if (pn) g.pns.add(pn);
-    g.count   += 1;
-    g.blocked += blocked;
-    g.dr      += dr;
+    g.count       += 1;
+    g.dr          += dr;
     g.introVolume += vol;
 
     if (g.details.length < 100 && pn) {
@@ -308,26 +254,19 @@ function aggregateByZone(items, opts = {}) {
     const cap         = _physicalCapacity(zoneName);
     const curOcc      = Math.round(_inputCurrentOccupied(zoneName));
     const introVolume = Math.round(g.introVolume);
-    const blocked     = Math.round(g.blocked);
 
-    const occPct   = cap > 0 ? (curOcc / cap) * 100 : null;
-    const future   = _calcOcupacaoFutura(curOcc, introVolume, cap);
-    const futPct   = future?.futurePct ?? null;
-    const projOcc  = Math.round(future?.projectedOccupied ?? curOcc);
-    const baseProj = Math.round(future?.baseProjected ?? curOcc);
+    const occPct      = cap > 0 ? (curOcc / cap) * 100 : null;
+    const future      = _calcOcupacaoFutura(curOcc, introVolume, cap);
+    const futPct      = future?.futurePct ?? null;
+    const projOcc     = Math.round(future?.projectedOccupied ?? curOcc);
+    const baseProj    = Math.round(future?.baseProjected ?? curOcc);
 
-    // Disponível = Capacidade − Ocupado Hoje − Introduções PD − Bloqueado
-    // As introduções do PD sempre são subtraídas, com ou sem projeção futura.
-    // Se há projeção futura, projOcc já inclui introVolume (via _calcOcupacaoFutura),
-    // então usamos projOcc. Se não há, somamos curOcc + introVolume manualmente.
-    const occupiedTotal = future !== null
-      ? projOcc + blocked                          // projeção futura ativa: projOcc já inclui intro
-      : curOcc + introVolume + blocked;            // sem projeção: soma manualmente
-    const avail = cap > 0 ? Math.max(0, cap - occupiedTotal) : null;
-
-    // % de ocupação da aba "Situação Atual" considera ocupação hoje + PD introduzido
     const occWithPD    = curOcc + introVolume;
     const occWithPDPct = cap > 0 ? (occWithPD / cap) * 100 : occPct;
+
+    const occupiedTotal = future !== null ? projOcc : occWithPD;
+    const avail = cap > 0 ? Math.max(0, cap - occupiedTotal) : null;
+
     const sev = _sev(futPct ?? occWithPDPct ?? occPct);
 
     const sortedDetails = g.details.slice().sort((a, b) => {
@@ -339,15 +278,13 @@ function aggregateByZone(items, opts = {}) {
 
     result[zoneName] = {
       name: zoneName, abbr: OVERLAY_ZONES[zoneName].abbr,
-      curOcc, baseProjected: baseProj, projOcc, blocked, avail, cap,
-      occPct,                    // % só ocupação hoje (sem PD)
-      occWithPDPct,              // % ocupação hoje + PD introduzido
-      occWithPD,                 // cx ocupação hoje + PD
-      futPct, fator: future?.fator ?? null, volIntro: introVolume,
+      curOcc, baseProjected: baseProj, projOcc, avail, cap,
+      occPct, occWithPDPct, occWithPD, futPct,
+      fator: future?.fator ?? null, volIntro: introVolume,
       count: g.count, pnCount: g.pns.size, details: sortedDetails,
       hasCap: cap > 0, sev,
       avgDr: g.count > 0 ? (g.dr / g.count).toFixed(2) : "0,00",
-      selPeriod: opts.selectedPeriod ?? null,
+      selPeriod:  opts.selectedPeriod ?? null,
       prodHoje:   _state.volumeAtual,
       prodFutura: _state.volumeFuturo,
     };
@@ -355,44 +292,54 @@ function aggregateByZone(items, opts = {}) {
   return result;
 }
 
-
 /* ==========================================================================
-   HTML DO POPUP — redesign v9.0 (BI-grade)
+   HTML DO POPUP — v9.2 Clean
 ========================================================================== */
 
+/* Barra horizontal simples */
+function _bar(pct, color) {
+  const w = Math.min(100, Math.max(0, pct ?? 0)).toFixed(1);
+  return `
+    <div class="zp-bar">
+      <div class="zp-bar__fill" style="width:${w}%;background:${color}"></div>
+      <div class="zp-bar__m70"></div>
+      <div class="zp-bar__m90"></div>
+    </div>`;
+}
+
+/* Tabela de itens */
 function _tableHtml(details, selPeriod) {
   if (!details?.length) {
-    const periodMsg = selPeriod
+    const msg = selPeriod
       ? `Nenhuma peça introduzida até <strong>${selPeriod}</strong> nesta zona.`
       : "Nenhum item classificado nesta zona.";
-    return `
-      <div class="zo-no-data">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".35"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-        <p>${periodMsg}</p>
-        <span>Verifique as colunas <em>storage_zone</em> e <em>introduction_date</em></span>
-      </div>`;
+    return `<div class="zp-empty"><p>${msg}</p><span>Verifique as colunas <em>storage_zone</em> e <em>introduction_date</em></span></div>`;
   }
-  const periodLabel = selPeriod ? `até ${selPeriod}` : "todos os períodos";
+  const label = selPeriod ? `até ${selPeriod}` : "todos os períodos";
   return `
-    <div class="zo-items-block">
-      <div class="zo-items-header">
-        <span class="zo-items-header__title">Itens introduzidos</span>
-        <span class="zo-items-header__badge">${details.length} peça(s) · ${periodLabel}</span>
+    <div class="zp-table-block">
+      <div class="zp-table-header">
+        <span>Itens introduzidos</span>
+        <span class="zp-table-badge">${details.length} peça(s) · ${label}</span>
       </div>
-      <div class="zo-items-table-wrap">
-        <table class="zo-items-table">
+      <div class="zp-table-scroll">
+        <table class="zp-table">
           <thead>
-            <tr><th>PN</th><th>PE</th><th>Zona</th><th class="num">Vol. Excel</th><th class="num">Vol. Calc.</th><th>Introdução</th></tr>
+            <tr>
+              <th>PN</th><th>PE</th><th>Zona</th>
+              <th class="r">Vol. Excel</th><th class="r">Vol. Calc.</th>
+              <th>Introdução</th>
+            </tr>
           </thead>
           <tbody>
             ${details.map((r, i) => `
-              <tr class="${i % 2 !== 0 ? "alt" : ""}">
-                <td class="pn">${r.pn || "—"}</td>
+              <tr class="${i % 2 ? "alt" : ""}">
+                <td class="mono">${r.pn || "—"}</td>
                 <td>${r.pe || "—"}</td>
                 <td>${r.zone || "—"}</td>
-                <td class="num">${_fmtCx(r.volExcel)}</td>
-                <td class="num bold">${_fmtCx(r.volCalc)}</td>
-                <td class="date">${r.intro || "—"}</td>
+                <td class="r">${_fmtCx(r.volExcel)}</td>
+                <td class="r bold">${_fmtCx(r.volCalc)}</td>
+                <td class="muted">${r.intro || "—"}</td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -400,110 +347,101 @@ function _tableHtml(details, selPeriod) {
     </div>`;
 }
 
-function _kpiCard(label, value, sub, color) {
-  return `
-    <div class="zo-kpi">
-      <span class="zo-kpi__label">${label}</span>
-      <strong class="zo-kpi__value" style="color:${color || "inherit"}">${value}</strong>
-      ${sub ? `<span class="zo-kpi__sub">${sub}</span>` : ""}
-    </div>`;
-}
-
-function _occBar(pct, color, showThresholds) {
-  const w = Math.min(100, Math.max(0, pct ?? 0));
-  return `
-    <div class="zo-occ-bar-wrap">
-      <div class="zo-occ-bar">
-        <div class="zo-occ-bar__fill" style="width:${w.toFixed(1)}%;background:${color}">
-          ${w >= 18 ? `<span class="zo-occ-bar__label-in">${w.toFixed(1)}%</span>` : ""}
-        </div>
-        ${showThresholds ? `
-          <div class="zo-occ-bar__mark" style="left:80%" title="80%"></div>
-          <div class="zo-occ-bar__mark zo-occ-bar__mark--crit" style="left:90%" title="90%"></div>` : ""}
-      </div>
-      ${w < 18 ? `<span class="zo-occ-bar__label-out" style="color:${color}">${w.toFixed(1)}%</span>` : ""}
-    </div>`;
-}
-
-/* -- ABA SITUAÇÃO ATUAL -- */
-function _buildTabAtual(m) {
-  const sevCur   = _sev(m.occWithPDPct ?? m.occPct);
-  const curClr   = _sevColor(sevCur);
+/* Aba Situação Atual — v9.2 */
+function _tabAtual(m) {
+  const sc       = _sevCfg(m.occWithPDPct ?? m.occPct);
   const cap      = m.cap ?? 0;
-  const avail    = m.avail ?? 0;
-  const occPct   = m.occPct ?? 0;                          // só hoje
-  const occWPct  = m.occWithPDPct ?? occPct;               // hoje + PD
-  const availPct = cap > 0 ? Math.max(0, (avail / cap) * 100) : 0;
+  const pct      = m.occWithPDPct ?? m.occPct ?? 0;
+  const avPct    = cap > 0 ? Math.max(0, ((m.avail ?? 0) / cap) * 100) : 0;
+  const totalOcc = m.curOcc + (m.volIntro ?? 0);
+  const totalPct = cap > 0 ? (totalOcc / cap) * 100 : 0;
+  const availColor = (m.avail ?? 0) > 0 ? "#16a34a" : "#dc2626";
 
   return `
-    <div class="zo-tab-pane" id="zo-tab-atual">
+    <div class="zp-pane" id="zp-pane-atual">
 
-      <div class="zo-kpi-row zo-kpi-row--2">
-        ${_kpiCard("Ocupado Hoje", _fmtCx(m.curOcc), `${occPct.toFixed(1)}% utilizado`, curClr)}
-        ${_kpiCard("Disponível", _fmtMaybe(avail), `${availPct.toFixed(1)}% livre`, avail > 0 ? "#16a34a" : "#dc2626")}
-      </div>
-
-      <div class="zo-section">
-        <div class="zo-section__hd">
-          <span class="zo-section__label">Nível de Ocupação</span>
-          <span class="zo-section__badge" style="background:${_sevBg(sevCur)};color:${curClr};border-color:${_sevBorder(sevCur)}">${_sevLabel(sevCur)}</span>
+      <!-- 3 métricas topo -->
+      <div class="zp-metrics">
+        <div class="zp-metric">
+          <span class="zp-metric__lbl">Capacidade</span>
+          <span class="zp-metric__val">${_fmtMaybe(cap)}</span>
         </div>
-        <!-- Barra: hoje + PD introduzido -->
-        ${_occBar(occWPct, curClr, true)}
-        <div class="zo-occ-sub-row">
-          <span class="zo-occ-sub-lbl">Bloqueado</span>
-          <div class="zo-occ-sub-bar">
-            <div style="width:${cap > 0 ? Math.min(100,(m.blocked/cap)*100).toFixed(1) : 0}%;background:#94a3b8;height:100%;border-radius:3px"></div>
-          </div>
-          <span class="zo-occ-sub-val">${_fmtCx(m.blocked)}</span>
+        <div class="zp-metric">
+          <span class="zp-metric__lbl">Ocupado hoje</span>
+          <span class="zp-metric__val" style="color:${sc.fg}">${_fmtCx(m.curOcc)}</span>
+          <span class="zp-metric__sub">${(m.occPct ?? 0).toFixed(1)}% da cap.</span>
+        </div>
+        <div class="zp-metric">
+          <span class="zp-metric__lbl">Disponível</span>
+          <span class="zp-metric__val" style="color:${availColor}">${_fmtMaybe(m.avail)}</span>
+          <span class="zp-metric__sub">${avPct.toFixed(1)}% livre</span>
         </div>
       </div>
 
-      <div class="zo-detail-grid">
-        <div class="zo-detail-item">
-          <span class="zo-detail-item__lbl">Total</span>
-          <span class="zo-detail-item__val">${_fmtMaybe(cap)}</span>
+      <!-- Régua de ocupação -->
+      <div class="zp-occ-section">
+        <div class="zp-occ-label">
+          <span>Nível de ocupação</span>
+          <span class="zp-badge" style="color:${sc.fg};background:${sc.bg};border-color:${sc.border}">
+            ${sc.label} · ${pct.toFixed(1)}%
+          </span>
         </div>
-        <div class="zo-detail-item">
-          <span class="zo-detail-item__lbl">Ocupado Hoje</span>
-          <span class="zo-detail-item__val" style="color:${curClr}">${_fmtCx(m.curOcc)}</span>
-        </div>
-        ${m.volIntro > 0 ? `
-        <div class="zo-detail-item">
-          <span class="zo-detail-item__lbl">+ PD Introduzido</span>
-          <span class="zo-detail-item__val" style="color:#d97706">${_fmtCx(m.volIntro)}</span>
-        </div>` : ""}
-        <div class="zo-detail-item">
-          <span class="zo-detail-item__lbl">Bloqueado</span>
-          <span class="zo-detail-item__val">${_fmtCx(m.blocked)}</span>
-        </div>
-        <div class="zo-detail-item zo-detail-item--hl" style="border-color:${avail > 0 ? "#16a34a" : "#dc2626"}">
-          <span class="zo-detail-item__lbl">Disponível</span>
-          <span class="zo-detail-item__val" style="color:${avail > 0 ? "#16a34a" : "#dc2626"}">${_fmtMaybe(avail)}</span>
+        ${_bar(pct, sc.fg)}
+        <div class="zp-occ-legend">
+          <span><span class="zp-dot" style="background:${sc.fg}"></span>Ocupado hoje${m.volIntro > 0 ? " + PD" : ""}</span>
+          <span class="muted" style="display:flex;align-items:center;gap:8px">
+            <span style="display:flex;align-items:center;gap:3px">
+              <span style="width:2px;height:10px;background:#d97706;display:inline-block;border-radius:1px"></span>70%
+            </span>
+            <span style="display:flex;align-items:center;gap:3px">
+              <span style="width:2px;height:10px;background:#dc2626;display:inline-block;border-radius:1px"></span>90%
+            </span>
+          </span>
         </div>
       </div>
 
-      <div class="zo-section" style="margin-top:12px">
-        <div class="zo-section__hd">
-          <span class="zo-section__label">Introduções até o período</span>
-          ${m.selPeriod ? `<span class="zo-period-chip">${m.selPeriod}</span>` : ""}
+      <!-- Bloco: Impacto da Introdução (PD) -->
+      <div class="zp-impact-block">
+        <div class="zp-impact-title">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Impacto da Introdução (PD)
         </div>
-        <div class="zo-intro-grid">
-          <div class="zo-intro-item">
-            <span class="zo-intro-item__val">${m.count}</span>
-            <span class="zo-intro-item__lbl">Itens</span>
+        <div class="zp-impact-row">
+          <div class="zp-impact-cell">
+            <span class="zp-impact-cell__lbl">Ocupado hoje</span>
+            <span class="zp-impact-cell__val">${_fmtCx(m.curOcc)}</span>
+            <span class="zp-impact-cell__pct">${(m.occPct ?? 0).toFixed(1)}%</span>
           </div>
-          <div class="zo-intro-item">
-            <span class="zo-intro-item__val">${m.pnCount}</span>
-            <span class="zo-intro-item__lbl">Part Numbers</span>
+          <div class="zp-impact-op">+</div>
+          <div class="zp-impact-cell zp-impact-cell--pd">
+            <span class="zp-impact-cell__lbl">Introdução PD</span>
+            <span class="zp-impact-cell__val" style="color:#d97706">${_fmtCx(m.volIntro ?? 0)}</span>
+            <span class="zp-impact-cell__pct">${m.volIntro > 0 && cap > 0 ? ((m.volIntro / cap) * 100).toFixed(1) + "%" : "—"}</span>
           </div>
-          <div class="zo-intro-item">
-            <span class="zo-intro-item__val">${_fmtCx(m.volIntro)}</span>
-            <span class="zo-intro-item__lbl">Volume</span>
+          <div class="zp-impact-op">=</div>
+          <div class="zp-impact-cell zp-impact-cell--total" style="border-color:${sc.fg}40">
+            <span class="zp-impact-cell__lbl">Total projetado</span>
+            <span class="zp-impact-cell__val" style="color:${sc.fg}">${_fmtCx(totalOcc)}</span>
+            <span class="zp-impact-cell__pct" style="color:${sc.fg};font-weight:700">${totalPct.toFixed(1)}%</span>
           </div>
-          <div class="zo-intro-item">
-            <span class="zo-intro-item__val">${m.avgDr}</span>
-            <span class="zo-intro-item__lbl">Daily Rate médio</span>
+        </div>
+      </div>
+
+      <!-- Introduções resumo -->
+      <div class="zp-intro-section">
+        <div class="zp-intro-title">
+          Introduções até o período
+          ${m.selPeriod ? `<span class="zp-chip">${m.selPeriod}</span>` : ""}
+        </div>
+        <div class="zp-intro-row">
+          <div class="zp-intro-stat">
+            <strong>${m.pnCount}</strong><span>Part Numbers</span>
+          </div>
+          <div class="zp-intro-stat">
+            <strong>${_fmtCx(m.volIntro)}</strong><span>Volume</span>
+          </div>
+          <div class="zp-intro-stat">
+            <strong>${m.avgDr}</strong><span>Daily Rate médio</span>
           </div>
         </div>
       </div>
@@ -512,152 +450,144 @@ function _buildTabAtual(m) {
     </div>`;
 }
 
-/* -- ABA PROJEÇÃO FUTURA -- */
-function _buildTabProjecao(m) {
-  const futPct     = m.futPct;
-  const futSev     = futPct !== null ? _sev(futPct) : "none";
-  const futClr     = _sevColor(futSev);
-  const curClr     = _sevColor(_sev(m.occPct));
-  const prodHoje   = m.prodHoje   ?? _state.volumeAtual;
-  const prodFutura = m.prodFutura ?? _state.volumeFuturo;
+/* Aba Projeção Futura */
+function _tabProj(m) {
+  const prodHoje   = m.prodHoje   ?? 0;
+  const prodFutura = m.prodFutura ?? 0;
 
   if (!prodHoje) {
     return `
-      <div class="zo-tab-pane" id="zo-tab-proj">
-        <div class="zo-empty-state">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" opacity=".3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <p class="zo-empty-state__title">Projeção não disponível</p>
-          <p class="zo-empty-state__desc">Informe o <strong>Vol. Atual</strong> (veíc./dia) no controle do mapa para ativar o cálculo de ocupação futura por zona.</p>
+      <div class="zp-pane" id="zp-pane-proj">
+        <div class="zp-empty zp-empty--center">
+          <p><strong>Projeção não disponível</strong></p>
+          <span>Informe o <strong>Vol. Atual</strong> (veíc./dia) no controle do mapa para ativar o cálculo.</span>
         </div>
       </div>`;
   }
 
-  const fator    = (prodFutura / prodHoje);
-  const fatorStr = fator.toFixed(2);
-  const delta    = (futPct !== null && m.occPct != null) ? (futPct - m.occPct) : null;
-  const deltaAbs = delta != null ? Math.abs(delta).toFixed(1) : "—";
-  const deltaIcon = delta != null ? (delta > 0.5 ? "▲" : delta < -0.5 ? "▼" : "→") : "";
-  const deltaClr  = delta != null ? (delta > 2 ? "#dc2626" : delta < -2 ? "#16a34a" : "#64748b") : "#64748b";
+  const futSc  = _sevCfg(m.futPct);
+  const curSc  = _sevCfg(m.occPct);
+  const fator  = (prodFutura / prodHoje).toFixed(2);
+  const delta  = m.futPct != null && m.occPct != null ? (m.futPct - m.occPct) : null;
+  const deltaStr = delta != null
+    ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} pp`
+    : "—";
+  const deltaColor = delta == null ? "#94a3b8" : delta > 2 ? "#dc2626" : delta < -2 ? "#16a34a" : "#64748b";
 
   return `
-    <div class="zo-tab-pane" id="zo-tab-proj">
+    <div class="zp-pane" id="zp-pane-proj">
 
-      ${futPct !== null ? `
-        <div class="zo-proj-hero" style="border-color:${_sevBorder(futSev)};background:${_sevBg(futSev)}">
-          <div class="zo-proj-hero__left">
-            <span class="zo-proj-hero__lbl">Ocupação Futura</span>
-            <span class="zo-proj-hero__pct" style="color:${futClr}">${futPct.toFixed(1)}%</span>
-            <span class="zo-proj-hero__status" style="color:${futClr}">${_sevLabel(futSev)}</span>
+      <!-- Hero: % futuro -->
+      ${m.futPct != null ? `
+        <div class="zp-proj-hero" style="border-color:${futSc.border}">
+          <div>
+            <div class="zp-proj-hero__pct" style="color:${futSc.fg}">${m.futPct.toFixed(1)}%</div>
+            <div class="zp-proj-hero__lbl">Ocupação futura projetada</div>
+            <span class="zp-badge" style="color:${futSc.fg};background:${futSc.bg};border-color:${futSc.border}">${futSc.label}</span>
           </div>
-          <div class="zo-proj-hero__right">
-            <div class="zo-proj-hero__vs">
-              <div class="zo-proj-hero__vs-item">
-                <span class="zo-proj-hero__vs-lbl">Hoje</span>
-                <span class="zo-proj-hero__vs-val" style="color:${curClr}">${m.occPct != null ? m.occPct.toFixed(1)+"%" : "—"}</span>
-              </div>
-              <span class="zo-proj-hero__vs-arr">→</span>
-              <div class="zo-proj-hero__vs-item">
-                <span class="zo-proj-hero__vs-lbl">Futuro</span>
-                <span class="zo-proj-hero__vs-val" style="color:${futClr};font-weight:800">${futPct.toFixed(1)}%</span>
-              </div>
+          <div class="zp-proj-hero__compare">
+            <div class="zp-proj-vs">
+              <span style="color:${curSc.fg}">${(m.occPct ?? 0).toFixed(1)}%</span>
+              <span class="zp-proj-vs__arrow">→</span>
+              <span style="color:${futSc.fg};font-weight:800">${m.futPct.toFixed(1)}%</span>
             </div>
-            <span class="zo-proj-hero__delta" style="color:${deltaClr}">${deltaIcon} ${deltaAbs} pp</span>
+            <span class="zp-proj-delta" style="color:${deltaColor}">${deltaStr}</span>
           </div>
         </div>
+        ${_bar(m.futPct, futSc.fg)}
       ` : ""}
 
-      <div class="zo-formula-block">
-        <div class="zo-formula-block__hd">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <!-- Fórmula -->
+      <div class="zp-formula">
+        <div class="zp-formula__title">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Fórmula de projeção
         </div>
-        <div class="zo-formula-eq">
-          <div class="zo-formula-term">
-            <span class="zo-formula-term__val">${_fmtCx(m.curOcc)}</span>
-            <span class="zo-formula-term__lbl">Ocup. Hoje</span>
+        <div class="zp-formula__eq">
+          <div class="zp-formula__term">
+            <span class="zp-formula__val">${_fmtCx(m.curOcc)}</span>
+            <span class="zp-formula__lbl">Ocup. hoje</span>
           </div>
-          <span class="zo-formula-op">×</span>
-          <div class="zo-formula-frac">
-            <span class="zo-formula-frac__num">${_fmtVeic(prodFutura)}</span>
-            <span class="zo-formula-frac__bar"></span>
-            <span class="zo-formula-frac__den">${_fmtVeic(prodHoje)}</span>
+          <span class="zp-formula__op">×</span>
+          <div class="zp-formula__frac">
+            <span>${_fmtVeic(prodFutura)}</span>
+            <span class="zp-formula__frac-bar"></span>
+            <span>${_fmtVeic(prodHoje)}</span>
           </div>
-          <span class="zo-formula-op">=</span>
-          <div class="zo-formula-term zo-formula-term--res" style="border-color:${_sevBorder(futSev)};background:${_sevBg(futSev)}">
-            <span class="zo-formula-term__val" style="color:${futClr}">${_fmtCx(m.baseProjected)}</span>
-            <span class="zo-formula-term__lbl" style="color:${futClr}">Ocup. base futura</span>
+          <span class="zp-formula__op">=</span>
+          <div class="zp-formula__term zp-formula__term--res" style="border-color:${futSc.border}">
+            <span class="zp-formula__val" style="color:${futSc.fg}">${_fmtCx(m.baseProjected)}</span>
+            <span class="zp-formula__lbl">Ocup. base futura</span>
           </div>
         </div>
-        <div class="zo-formula-note">
-          Fator ${fatorStr}× ${m.volIntro > 0 ? `· +${_fmtCx(m.volIntro)} introduções Excel` : "· sem introduções no período"}
+        <div class="zp-formula__note">
+          Fator ${fator}×
+          ${m.volIntro > 0 ? `· +${_fmtCx(m.volIntro)} introduções Excel` : "· sem introduções no período"}
         </div>
       </div>
 
-      ${futPct !== null ? `
-        <div class="zo-breakdown__row zo-breakdown__row--pct" style="background:${_sevBg(futSev)};border-radius:8px;padding:12px 14px;margin-top:8px">
-          <span style="color:${futClr};font-weight:600">Taxa de ocupação futura</span>
-          <span style="color:${futClr};font-weight:800;font-size:18px">${futPct.toFixed(1)}%</span>
-        </div>
-      ` : `
-        <div class="zo-empty-state" style="margin-top:12px">
-          <p class="zo-empty-state__title">Sem dados de projeção</p>
-          <p class="zo-empty-state__desc">Não foi possível calcular a ocupação futura para esta zona.</p>
-        </div>
-      `}
     </div>`;
 }
 
-/* -- POPUP PRINCIPAL v9.0 -- */
+/* Popup principal */
 function _buildPopupHtml(zoneName, m) {
-  const sevCur  = _sev(m.occPct);
-  const sevFut  = m.futPct != null ? _sev(m.futPct) : null;
-  const mainSev = sevFut ?? sevCur;
-  const curClr  = _sevColor(sevCur);
-  const futClr  = _sevColor(sevFut ?? "none");
-  const period  = m.selPeriod ? `Até ${m.selPeriod}` : "Todos os períodos";
-  const todayW  = Math.min(100, m.occPct ?? 0);
-  const futureW = m.futPct != null ? Math.min(100, m.futPct) : null;
+  const mainSev = m.futPct != null ? _sev(m.futPct) : _sev(m.occWithPDPct ?? m.occPct);
+  const sc      = SEV[mainSev] ?? SEV.none;
+  const todayPct = Math.min(100, m.occWithPDPct ?? m.occPct ?? 0);
+  const futPct   = m.futPct != null ? Math.min(100, m.futPct) : null;
+  const period   = m.selPeriod ? `Até ${m.selPeriod}` : "Todos os períodos";
 
   return `
-    <div class="zo-hd" style="background:${_sevHeaderGradient(mainSev)}">
-      <div class="zo-hd__left">
-        <div class="zo-hd__zone">${zoneName}</div>
-        <div class="zo-hd__meta">
-          <span class="zo-hd__period">${period}</span>
-          ${m.cap > 0 ? `<span class="zo-hd__cap">Cap. ${_fmtCx(m.cap)}</span>` : ""}
-        </div>
+    <!-- CABEÇALHO -->
+    <div class="zp-hd" style="background:${_headerGradient(mainSev)}">
+      <div class="zp-hd__info">
+        <span class="zp-hd__name">${zoneName}</span>
+        <span class="zp-hd__period">${period}</span>
       </div>
-      <div class="zo-hd__right">
-        <div class="zo-hd__pills">
-          ${m.occWithPDPct != null ? `<span class="zo-hd__pill">Hoje ${m.occWithPDPct.toFixed(0)}%</span>` : ""}
-          ${m.futPct != null ? `<span class="zo-hd__pill zo-hd__pill--fut">Futuro ${m.futPct.toFixed(0)}%</span>` : ""}
+      <div class="zp-hd__right">
+        <div class="zp-hd__pcts">
+          <span class="zp-hd__pct-lbl">Hoje</span>
+          <span class="zp-hd__pct-val">${(m.occWithPDPct ?? m.occPct ?? 0).toFixed(0)}%</span>
+          ${futPct != null ? `
+            <span class="zp-hd__pct-sep">→</span>
+            <span class="zp-hd__pct-lbl">Futuro</span>
+            <span class="zp-hd__pct-val zp-hd__pct-val--fut">${futPct.toFixed(0)}%</span>` : ""}
         </div>
-        <span class="zo-hd__status-pill">${_sevLabel(mainSev)}</span>
-        <button class="zo-hd__close" type="button" aria-label="Fechar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <span class="zp-hd__status">${sc.label}</span>
+        <button class="zp-hd__close" type="button" aria-label="Fechar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
         </button>
       </div>
     </div>
-    <div class="zo-hd-bar">
-      <div class="zo-hd-bar__fill" style="width:${todayW.toFixed(1)}%;background:${curClr}aa"></div>
-      ${futureW != null ? `<div class="zo-hd-bar__fut" style="width:${futureW.toFixed(1)}%;border-right:2.5px solid ${futClr}"></div>` : ""}
-      ${todayW >= 90 ? `<div class="zo-hd-bar__mark" style="left:90%"></div>` : ""}
+
+    <!-- MINI GAUGE NO HEADER -->
+    <div class="zp-hd-gauge">
+      <div class="zp-hd-gauge__today" style="width:${todayPct.toFixed(1)}%;background:${sc.fg}44"></div>
+      ${futPct != null ? `<div class="zp-hd-gauge__fut" style="width:${futPct.toFixed(1)}%;border-right:2px solid ${sc.fg}"></div>` : ""}
     </div>
-    <div class="zo-tabs" role="tablist">
-      <button class="zo-tab zo-tab--active" role="tab" data-tab="atual" aria-selected="true">
+
+    <!-- ABAS -->
+    <div class="zp-tabs">
+      <button class="zp-tab zp-tab--active" data-tab="atual" type="button">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Situação Atual
-        ${m.occWithPDPct != null ? `<span class="zo-tab__badge" style="background:${_sevBg(sevCur)};color:${curClr};border-color:${_sevBorder(sevCur)}">${m.occWithPDPct.toFixed(0)}%</span>` : ""}
+        <span class="zp-tab__pill" style="color:${SEV[_sev(m.occWithPDPct ?? m.occPct)].fg}">
+          ${(m.occWithPDPct ?? m.occPct ?? 0).toFixed(0)}%
+        </span>
       </button>
-      <button class="zo-tab" role="tab" data-tab="proj" aria-selected="false">
+      <button class="zp-tab" data-tab="proj" type="button">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         Projeção Futura
-        ${m.futPct != null ? `<span class="zo-tab__badge" style="background:${_sevBg(sevFut)};color:${futClr};border-color:${_sevBorder(sevFut)}">${m.futPct.toFixed(0)}%</span>` : ""}
+        ${m.futPct != null ? `<span class="zp-tab__pill" style="color:${SEV[_sev(m.futPct)].fg}">${m.futPct.toFixed(0)}%</span>` : ""}
       </button>
     </div>
-    <div class="zo-body">
-      ${_buildTabAtual(m)}
-      ${_buildTabProjecao(m)}
+
+    <!-- CONTEÚDO -->
+    <div class="zp-body">
+      ${_tabAtual(m)}
+      ${_tabProj(m)}
     </div>`;
 }
 
@@ -682,7 +612,7 @@ function _positionPopup(popup, hotspot) {
   const hr  = hotspot.getBoundingClientRect();
   const vw  = window.innerWidth;
   const vh  = window.innerHeight;
-  const pw  = popup.offsetWidth  || 360;
+  const pw  = popup.offsetWidth  || 380;
   const ph  = popup.offsetHeight || 520;
   const GAP = 10;
 
@@ -691,7 +621,6 @@ function _positionPopup(popup, hotspot) {
 
   if (left + pw > vw - GAP) left = hr.left - pw - GAP;
   if (left < GAP)            left = Math.max(GAP, hr.left + hr.width / 2 - pw / 2);
-
   top  = Math.max(GAP, Math.min(top,  vh - ph - GAP));
   left = Math.max(GAP, Math.min(left, vw - pw - GAP));
 
@@ -700,19 +629,18 @@ function _positionPopup(popup, hotspot) {
 }
 
 function _initTabListeners(popup) {
-  const tabs  = popup.querySelectorAll(".zo-tab");
-  const panes = popup.querySelectorAll(".zo-tab-pane");
-
+  const tabs  = popup.querySelectorAll(".zp-tab");
+  const panes = popup.querySelectorAll(".zp-pane");
   tabs.forEach(tab => {
     tab.addEventListener("click", e => {
       e.stopPropagation();
       const target = tab.dataset.tab;
       tabs.forEach(t => {
-        const isActive = t.dataset.tab === target;
-        t.classList.toggle("zo-tab--active", isActive);
-        t.setAttribute("aria-selected", String(isActive));
+        const on = t.dataset.tab === target;
+        t.classList.toggle("zp-tab--active", on);
+        t.setAttribute("aria-selected", String(on));
       });
-      panes.forEach(p => { p.style.display = p.id === `zo-tab-${target}` ? "block" : "none"; });
+      panes.forEach(p => { p.style.display = p.id === `zp-pane-${target}` ? "block" : "none"; });
     });
   });
   panes.forEach((p, i) => { p.style.display = i === 0 ? "block" : "none"; });
@@ -722,7 +650,7 @@ function _ensureListeners() {
   if (_listenersAttached) return;
   _listenersAttached = true;
   document.addEventListener("click", e => {
-    if (e.target.closest(".zo-hotspot") || e.target.closest(".zo-popup-float")) return;
+    if (e.target.closest(".zo-hotspot") || e.target.closest(".zp-popup")) return;
     _closeAllPopups();
   }, { capture: true });
   document.addEventListener("keydown", e => { if (e.key === "Escape") _closeAllPopups(); });
@@ -735,14 +663,12 @@ function _ensureListeners() {
    HOTSPOT
 ========================================================================== */
 function _createHotspot(zoneName, cfg, hotspotCfg, m, map) {
-  const sevCls = m.sev === "none" ? "low" : m.sev;
-  const clr    = _sevColor(m.sev);
-
-  // Mostra % futura se disponível; senão, hoje + PD introduzido (mais preciso que só hoje)
+  const sevCls    = m.sev === "none" ? "low" : m.sev;
+  const sc        = SEV[m.sev] ?? SEV.none;
   const baseOccPct = m.occWithPDPct ?? m.occPct;
-  const mainPct    = m.futPct !== null ? m.futPct : baseOccPct;
-  const mainLbl    = mainPct != null ? `${mainPct.toFixed(0)}%` : "—";
-  const isFuture   = m.futPct !== null;
+  const mainPct   = m.futPct !== null ? m.futPct : baseOccPct;
+  const mainLbl   = mainPct != null ? `${mainPct.toFixed(0)}%` : "—";
+  const isFuture  = m.futPct !== null;
 
   let trendIcon = "";
   if (isFuture && baseOccPct != null) {
@@ -765,7 +691,7 @@ function _createHotspot(zoneName, cfg, hotspotCfg, m, map) {
     <span class="zo-hs__name">${zoneName}</span>
     <span class="zo-hs__rate">${mainLbl}${trendIcon}</span>
     ${isFuture ? `<span class="zo-hs__tag">projeção</span>` : ""}
-    <span class="zo-hs__dot" style="background:${clr}" aria-hidden="true"></span>`;
+    <span class="zo-hs__dot" style="background:${sc.fg}" aria-hidden="true"></span>`;
 
   hs.addEventListener("click", e => {
     e.stopPropagation();
@@ -778,7 +704,7 @@ function _createHotspot(zoneName, cfg, hotspotCfg, m, map) {
       hs.setAttribute("aria-expanded", "true");
 
       const popup = document.createElement("div");
-      popup.className = `zo-popup-float zo-popup--${sevCls}`;
+      popup.className = `zp-popup zp-popup--${sevCls}`;
       popup.setAttribute("role", "dialog");
       popup.setAttribute("aria-label", `Detalhes — ${zoneName}`);
       popup.setAttribute("aria-modal", "true");
@@ -790,7 +716,7 @@ function _createHotspot(zoneName, cfg, hotspotCfg, m, map) {
 
       requestAnimationFrame(() => requestAnimationFrame(() => _positionPopup(popup, hs)));
 
-      popup.querySelector(".zo-hd__close")?.addEventListener("click", e => {
+      popup.querySelector(".zp-hd__close")?.addEventListener("click", e => {
         e.stopPropagation();
         _closeAllPopups();
       });
@@ -865,9 +791,8 @@ function renderZoneOverlay(source, maybeOpts) {
 
   for (const zoneName of ZONE_ORDER) {
     if (!agg[zoneName]) continue;
-    const cfg      = OVERLAY_ZONES[zoneName];
-    const hotspots = cfg.hotspots || [];
-    hotspots.forEach(hsCfg => _createHotspot(zoneName, cfg, hsCfg, agg[zoneName], map));
+    const cfg = OVERLAY_ZONES[zoneName];
+    cfg.hotspots.forEach(hsCfg => _createHotspot(zoneName, cfg, hsCfg, agg[zoneName], map));
   }
 
   _syncBadges(agg);
@@ -885,8 +810,6 @@ function setOverlayContext(ctx = {}) {
   if (ctx.zoneCurrentOccupied && typeof ctx.zoneCurrentOccupied === "object") {
     _state.zoneCurrentOccupied = { ...ctx.zoneCurrentOccupied };
   }
-  // volumeAtual  = Produção Hoje   (veíc./dia)
-  // volumeFuturo = Produção Futura (veíc./dia)
   if (ctx.volumeAtual  != null) _state.volumeAtual  = +ctx.volumeAtual;
   if (ctx.volumeFuturo != null) _state.volumeFuturo = +ctx.volumeFuturo;
 }
@@ -894,20 +817,15 @@ function setOverlayContext(ctx = {}) {
 function getOverlayContext() { return { ..._state }; }
 
 /* ==========================================================================
-   CSS INJETADO — v8.2 (adiciona .zo-formula-box)
-========================================================================== */
-
-/* ==========================================================================
-   CSS INJETADO — v9.0
+   CSS INJETADO — v9.2 Clean
 ========================================================================== */
 (function _injectStyles() {
-  if (document.getElementById("zo-styles-v90")) return;
-  ["zo-styles-v82","zo-styles-v81","zo-styles-v8","zo-future-styles","zo-styles-v5"].forEach(id => {
-    document.getElementById(id)?.remove();
-  });
+  if (document.getElementById("zo-styles-v92")) return;
+  ["zo-styles-v91","zo-styles-v90","zo-styles-v82","zo-styles-v81","zo-styles-v8","zo-future-styles","zo-styles-v5"]
+    .forEach(id => document.getElementById(id)?.remove());
 
   const s = document.createElement("style");
-  s.id = "zo-styles-v90";
+  s.id = "zo-styles-v92";
   s.textContent = `
 
     /* ── HOTSPOT ─────────────────────────────────────────────── */
@@ -917,246 +835,214 @@ function getOverlayContext() { return { ..._state }; }
       background:transparent; border:3px solid transparent;
       border-radius:8px; cursor:pointer; padding:6px 8px; z-index:3;
       transition:border-color .15s,background .15s,box-shadow .15s;
-      box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),0 2px 8px rgba(15,23,42,.18);
     }
-    .zo-hotspot--low   { border-color:rgba(22,163,74,.95);  background:rgba(22,163,74,.16);  box-shadow:inset 0 0 0 1px rgba(255,255,255,.38),0 0 0 1px rgba(22,163,74,.18),0 3px 10px rgba(22,163,74,.22); }
-    .zo-hotspot--medium{ border-color:rgba(217,119,6,.96); background:rgba(217,119,6,.17); box-shadow:inset 0 0 0 1px rgba(255,255,255,.36),0 0 0 1px rgba(217,119,6,.18),0 3px 10px rgba(217,119,6,.24); }
-    .zo-hotspot--high  { border-color:rgba(220,38,38,.96);  background:rgba(220,38,38,.17);  box-shadow:inset 0 0 0 1px rgba(255,255,255,.36),0 0 0 1px rgba(220,38,38,.18),0 3px 10px rgba(220,38,38,.24); }
-    .zo-hotspot:hover  { transform:scale(1.01); box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 0 0 2px rgba(255,255,255,.55),0 5px 16px rgba(15,23,42,.28); }
-    .zo-hotspot--open  { box-shadow:inset 0 0 0 2px rgba(255,255,255,.62),0 0 0 2px rgba(0,21,51,.34),0 6px 18px rgba(15,23,42,.32); }
-    .zo-hs__name,.zo-hs__rate { color:#001533; background:rgba(255,255,255,.86); border:1px solid rgba(255,255,255,.95); border-radius:5px; padding:2px 6px; line-height:1.2; box-shadow:0 1px 4px rgba(15,23,42,.18); }
+    .zo-hotspot--low    { border-color:rgba(22,163,74,.95);  background:rgba(22,163,74,.16);  }
+    .zo-hotspot--medium { border-color:rgba(217,119,6,.96);  background:rgba(217,119,6,.17);  }
+    .zo-hotspot--high   { border-color:rgba(220,38,38,.96);  background:rgba(220,38,38,.17);  }
+    .zo-hotspot:hover   { transform:scale(1.01); }
+    .zo-hotspot--open   { box-shadow:inset 0 0 0 2px rgba(255,255,255,.62),0 0 0 2px rgba(0,21,51,.34); }
+    .zo-hs__name,.zo-hs__rate { color:#001533; background:rgba(255,255,255,.9); border:1px solid rgba(255,255,255,.95); border-radius:5px; padding:2px 6px; line-height:1.2; }
     .zo-hs__name { font-size:11px; font-weight:900; }
     .zo-hs__rate { font-size:16px; font-weight:800; padding:2px 8px; display:flex; align-items:center; gap:3px; }
-    .zo-hs__tag  { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:rgba(0,21,51,.7); background:rgba(255,255,255,.75); border-radius:3px; padding:1px 4px; }
-    .zo-hs__dot  { width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 2px rgba(0,21,51,.35),0 2px 7px rgba(15,23,42,.35); margin-top:1px; }
+    .zo-hs__tag  { font-size:9px; font-weight:600; text-transform:uppercase; color:rgba(0,21,51,.6); background:rgba(255,255,255,.75); border-radius:3px; padding:1px 4px; }
+    .zo-hs__dot  { width:10px; height:10px; border-radius:50%; border:2px solid #fff; }
     .zo-hs__trend { font-size:12px; font-weight:700; }
     .zo-hs__trend--up { color:#dc2626; }
     .zo-hs__trend--dn { color:#16a34a; }
     .zo-hs__trend--eq { color:#94a3b8; }
 
-    /* ── POPUP CONTAINER ─────────────────────────────────────── */
-    .zo-popup-float {
+    /* ── POPUP ───────────────────────────────────────────────── */
+    .zp-popup {
       position:fixed; z-index:9999;
-      width:380px; max-height:90vh;
-      overflow:hidden; display:flex; flex-direction:column;
-      background:#ffffff; border-radius:14px;
+      width:380px; max-height:88vh;
+      display:flex; flex-direction:column; overflow:hidden;
+      background:#fff; border-radius:12px;
+      border:1.5px solid #e2e8f0;
+      box-shadow:0 20px 50px rgba(0,0,0,.16),0 6px 16px rgba(0,0,0,.10);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      box-shadow:0 25px 60px rgba(0,0,0,.22),0 8px 20px rgba(0,0,0,.14);
-      animation:zo-in .18s cubic-bezier(.22,.68,0,1.2) forwards;
+      animation:zp-in .17s cubic-bezier(.22,.68,0,1.15) forwards;
     }
-    @keyframes zo-in { from{opacity:0;transform:translateY(8px) scale(.96)} to{opacity:1;transform:translateY(0) scale(1)} }
-    .zo-popup--low    { border:2px solid #16a34a; }
-    .zo-popup--medium { border:2px solid #d97706; }
-    .zo-popup--high   { border:2px solid #dc2626; }
-    .zo-popup--none   { border:2px solid #e2e8f0; }
+    @keyframes zp-in { from{opacity:0;transform:translateY(6px) scale(.97)} to{opacity:1;transform:none} }
+    .zp-popup--low    { border-color:#bbf7d0; }
+    .zp-popup--medium { border-color:#fde68a; }
+    .zp-popup--high   { border-color:#fecaca; }
 
     /* ── HEADER ──────────────────────────────────────────────── */
-    .zo-hd {
-      display:flex; align-items:flex-start; justify-content:space-between;
-      padding:14px 16px 12px; border-radius:12px 12px 0 0; flex-shrink:0;
+    .zp-hd {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 16px 10px; flex-shrink:0; border-radius:10px 10px 0 0;
     }
-    .zo-hd__left { display:flex; flex-direction:column; gap:3px; }
-    .zo-hd__zone { font-size:15px; font-weight:800; color:#fff; letter-spacing:-.02em; }
-    .zo-hd__meta { display:flex; align-items:center; gap:8px; }
-    .zo-hd__period { font-size:11px; color:rgba(255,255,255,.65); }
-    .zo-hd__cap    { font-size:11px; color:rgba(255,255,255,.5); }
-    .zo-hd__right  { display:flex; align-items:center; gap:8px; }
-    .zo-hd__pills  { display:flex; gap:5px; }
-    .zo-hd__pill   { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; background:rgba(255,255,255,.15); color:#fff; white-space:nowrap; }
-    .zo-hd__pill--fut { background:rgba(255,255,255,.28); }
-    .zo-hd__status-pill { font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; background:rgba(0,0,0,.2); color:#fff; border:1px solid rgba(255,255,255,.25); white-space:nowrap; }
-    .zo-hd__close { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); border-radius:7px; color:rgba(255,255,255,.8); cursor:pointer; padding:5px 7px; display:flex; align-items:center; justify-content:center; transition:background .12s; }
-    .zo-hd__close:hover { background:rgba(255,255,255,.3); color:#fff; }
+    .zp-hd__info { display:flex; flex-direction:column; gap:3px; }
+    .zp-hd__name { font-size:16px; font-weight:800; color:#fff; letter-spacing:-.02em; }
+    .zp-hd__period { font-size:11px; color:rgba(255,255,255,.6); }
+    .zp-hd__right { display:flex; align-items:center; gap:10px; }
+    .zp-hd__pcts { display:flex; align-items:baseline; gap:5px; }
+    .zp-hd__pct-lbl { font-size:10px; color:rgba(255,255,255,.55); }
+    .zp-hd__pct-val { font-size:15px; font-weight:800; color:#fff; }
+    .zp-hd__pct-val--fut { opacity:.85; }
+    .zp-hd__pct-sep { color:rgba(255,255,255,.4); font-size:12px; }
+    .zp-hd__status { font-size:11px; font-weight:600; color:rgba(255,255,255,.8); background:rgba(0,0,0,.2); padding:3px 9px; border-radius:20px; white-space:nowrap; }
+    .zp-hd__close {
+      background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+      border-radius:6px; color:rgba(255,255,255,.7); cursor:pointer;
+      padding:5px 7px; display:flex; align-items:center; transition:background .12s;
+    }
+    .zp-hd__close:hover { background:rgba(255,255,255,.28); color:#fff; }
 
-    /* ── MINI GAUGE (header) ─────────────────────────────────── */
-    .zo-hd-bar { position:relative; height:4px; flex-shrink:0; }
-    .zo-hd-bar__fill { position:absolute; top:0; left:0; height:100%; transition:width .4s ease; }
-    .zo-hd-bar__fut  { position:absolute; top:0; left:0; height:100%; background:transparent; transition:width .4s ease; }
-    .zo-hd-bar__mark { position:absolute; top:0; bottom:0; width:2px; background:rgba(220,38,38,.7); }
+    /* mini gauge */
+    .zp-hd-gauge { position:relative; height:3px; flex-shrink:0; background:rgba(0,0,0,.08); }
+    .zp-hd-gauge__today { position:absolute; top:0; left:0; height:100%; transition:width .4s; }
+    .zp-hd-gauge__fut   { position:absolute; top:0; left:0; height:100%; background:transparent; transition:width .4s; }
 
     /* ── ABAS ────────────────────────────────────────────────── */
-    .zo-tabs { display:flex; border-bottom:1px solid #f1f5f9; background:#fafafa; flex-shrink:0; }
-    .zo-tab  {
+    .zp-tabs { display:flex; border-bottom:1px solid #f1f5f9; background:#fafafa; flex-shrink:0; }
+    .zp-tab {
       flex:1; display:flex; align-items:center; justify-content:center; gap:5px;
-      padding:10px 10px; font-size:12px; font-weight:500; color:#64748b;
-      background:none; border:none; border-bottom:2.5px solid transparent;
-      cursor:pointer; transition:color .15s,border-color .15s; white-space:nowrap;
+      padding:10px 8px; font-size:12px; font-weight:500; color:#64748b;
+      background:none; border:none; border-bottom:2px solid transparent;
+      cursor:pointer; transition:color .12s, border-color .12s; white-space:nowrap;
     }
-    .zo-tab:hover { color:#0f172a; }
-    .zo-popup--low    .zo-tab--active { color:#14532d; border-bottom-color:#16a34a; font-weight:700; }
-    .zo-popup--medium .zo-tab--active { color:#78350f; border-bottom-color:#d97706; font-weight:700; }
-    .zo-popup--high   .zo-tab--active { color:#7f1d1d; border-bottom-color:#dc2626; font-weight:700; }
-    .zo-popup--none   .zo-tab--active { color:#0f172a; border-bottom-color:#1a4d8f; font-weight:700; }
-    .zo-tab__badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:10px; border:1px solid transparent; }
+    .zp-tab:hover { color:#0f172a; }
+    .zp-popup--low    .zp-tab--active { color:#166534; border-bottom-color:#16a34a; font-weight:700; }
+    .zp-popup--medium .zp-tab--active { color:#78350f; border-bottom-color:#d97706; font-weight:700; }
+    .zp-popup--high   .zp-tab--active { color:#7f1d1d; border-bottom-color:#dc2626; font-weight:700; }
+    .zp-popup--none   .zp-tab--active { color:#1e3a5f; border-bottom-color:#2563a8; font-weight:700; }
+    .zp-tab__pill {
+      font-size:10px; font-weight:700;
+      padding:1px 7px; border-radius:10px;
+      background:rgba(0,0,0,.06);
+    }
 
-    /* ── BODY / PANES ────────────────────────────────────────── */
-    .zo-body { overflow-y:auto; flex:1; scrollbar-width:thin; scrollbar-color:#e2e8f0 transparent; }
-    .zo-popup--low    .zo-body { scrollbar-color:#16a34a transparent; }
-    .zo-popup--medium .zo-body { scrollbar-color:#d97706 transparent; }
-    .zo-popup--high   .zo-body { scrollbar-color:#dc2626 transparent; }
-    .zo-tab-pane { padding:14px 16px 16px; display:none; }
+    /* ── BODY ────────────────────────────────────────────────── */
+    .zp-body { overflow-y:auto; flex:1; scrollbar-width:thin; scrollbar-color:#e2e8f0 transparent; }
+    .zp-pane { padding:14px 16px 16px; }
 
-    /* ── KPI ROW ─────────────────────────────────────────────── */
-    .zo-kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
-    .zo-kpi-row--2 { grid-template-columns:repeat(2,1fr); }
-    .zo-kpi { background:#f8fafc; border:1px solid #f1f5f9; border-radius:9px; padding:10px 10px 8px; display:flex; flex-direction:column; gap:2px; }
-    .zo-popup--low    .zo-kpi { background:#f0fdf4; border-color:#d1fae5; }
-    .zo-popup--medium .zo-kpi { background:#fffbeb; border-color:#fde68a; }
-    .zo-popup--high   .zo-kpi { background:#fef2f2; border-color:#fecaca; }
-    .zo-kpi__label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
-    .zo-kpi__value { font-size:13px; font-weight:800; color:#0f172a; line-height:1.1; }
-    .zo-kpi__sub   { font-size:10px; color:#94a3b8; }
+    /* ── MÉTRICAS (sóbrias — sem fundo colorido) ─────────────── */
+    .zp-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+    .zp-metric {
+      background:#f8fafc; border:1px solid #e2e8f0; border-radius:9px;
+      padding:10px 10px 8px; display:flex; flex-direction:column; gap:2px;
+    }
+    .zp-metric__lbl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
+    .zp-metric__val { font-size:13px; font-weight:800; color:#0f172a; line-height:1.1; }
+    .zp-metric__sub { font-size:10px; color:#94a3b8; }
 
-    /* ── SECTION ─────────────────────────────────────────────── */
-    .zo-section { margin-bottom:12px; }
-    .zo-section__hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-    .zo-section__label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
-    .zo-popup--low    .zo-section__label { color:#166534; }
-    .zo-popup--medium .zo-section__label { color:#92400e; }
-    .zo-popup--high   .zo-section__label { color:#991b1b; }
-    .zo-section__badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; border:1px solid; }
+    /* ── BADGE INLINE ────────────────────────────────────────── */
+    .zp-badge {
+      display:inline-flex; align-items:center;
+      font-size:10px; font-weight:700; padding:2px 8px;
+      border-radius:10px; border:1px solid; white-space:nowrap;
+    }
 
-    /* ── BARRA DE OCUPAÇÃO ───────────────────────────────────── */
-    .zo-occ-bar-wrap { display:flex; align-items:center; gap:8px; }
-    .zo-occ-bar { flex:1; height:10px; background:#f1f5f9; border-radius:5px; overflow:visible; position:relative; }
-    .zo-popup--low    .zo-occ-bar { background:rgba(22,163,74,.1); }
-    .zo-popup--medium .zo-occ-bar { background:rgba(217,119,6,.1); }
-    .zo-popup--high   .zo-occ-bar { background:rgba(220,38,38,.1); }
-    .zo-occ-bar__fill { height:100%; border-radius:5px; display:flex; align-items:center; justify-content:flex-end; padding-right:6px; transition:width .5s ease; position:relative; }
-    .zo-occ-bar__label-in  { font-size:9px; font-weight:700; color:#fff; white-space:nowrap; }
-    .zo-occ-bar__label-out { font-size:11px; font-weight:700; white-space:nowrap; }
-    .zo-occ-bar__mark { position:absolute; top:-3px; bottom:-3px; width:2px; background:rgba(217,119,6,.6); border-radius:1px; }
-    .zo-occ-bar__mark--crit { background:rgba(220,38,38,.7); }
-    .zo-occ-sub-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
-    .zo-occ-sub-lbl { font-size:10px; color:#94a3b8; min-width:56px; }
-    .zo-occ-sub-bar { flex:1; height:4px; background:#f1f5f9; border-radius:2px; overflow:hidden; }
-    .zo-occ-sub-val { font-size:10px; font-weight:600; color:#94a3b8; min-width:60px; text-align:right; }
+    /* ── BARRA ───────────────────────────────────────────────── */
+    .zp-occ-section { margin-bottom:12px; }
+    .zp-occ-label { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
+    .zp-bar { position:relative; height:8px; background:#f1f5f9; border-radius:4px; overflow:visible; margin-bottom:5px; }
+    .zp-bar__fill { height:100%; border-radius:4px; transition:width .5s; }
+    .zp-bar__m70 { position:absolute; top:-4px; bottom:-4px; left:70%; width:2px; background:#d97706; border-radius:1px; z-index:2; }
+    .zp-bar__m90 { position:absolute; top:-4px; bottom:-4px; left:90%; width:2px; background:#dc2626; border-radius:1px; z-index:2; }
+    .zp-occ-legend { display:flex; align-items:center; justify-content:space-between; font-size:10px; color:#94a3b8; gap:6px; }
+    .zp-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+    .muted { color:#94a3b8; }
 
-    /* ── DETAIL GRID ─────────────────────────────────────────── */
-    .zo-detail-grid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px; margin-bottom:4px; }
-    @media(max-width:420px){ .zo-detail-grid { grid-template-columns:1fr 1fr; } }
-    .zo-detail-item { background:#f8fafc; border:1px solid #f1f5f9; border-radius:8px; padding:8px 8px 6px; display:flex; flex-direction:column; gap:3px; }
-    .zo-detail-item--hl { border-width:2px; }
-    .zo-detail-item__lbl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; }
-    .zo-detail-item__val { font-size:12px; font-weight:700; color:#0f172a; }
+    /* ── IMPACTO PD ──────────────────────────────────────────── */
+    .zp-impact-block {
+      margin-bottom:14px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:10px;
+      padding:10px 12px;
+    }
+    .zp-impact-title {
+      display:flex; align-items:center; gap:5px;
+      font-size:9px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.07em;
+      color:#94a3b8; margin-bottom:10px;
+    }
+    .zp-impact-row {
+      display:flex; align-items:center; gap:6px;
+    }
+    .zp-impact-cell {
+      flex:1; background:#fff; border:1px solid #e2e8f0;
+      border-radius:8px; padding:8px 10px;
+      display:flex; flex-direction:column; gap:2px;
+    }
+    .zp-impact-cell--pd    { border-color:#fde68a; background:#fffbeb; }
+    .zp-impact-cell--total { border-width:1.5px; }
+    .zp-impact-cell__lbl {
+      font-size:9px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.05em; color:#94a3b8;
+    }
+    .zp-impact-cell__val { font-size:13px; font-weight:800; color:#0f172a; line-height:1.1; }
+    .zp-impact-cell__pct { font-size:10px; color:#94a3b8; }
+    .zp-impact-op { font-size:18px; font-weight:700; color:#cbd5e1; flex-shrink:0; }
 
-    /* ── INTRO GRID ──────────────────────────────────────────── */
-    .zo-intro-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
-    .zo-intro-item { background:#f8fafc; border:1px solid #f1f5f9; border-radius:8px; padding:8px 6px 7px; text-align:center; display:flex; flex-direction:column; gap:2px; }
-    .zo-intro-item__val { font-size:12px; font-weight:800; color:#0f172a; line-height:1; }
-    .zo-intro-item__lbl { font-size:9px; color:#94a3b8; }
-    .zo-period-chip { font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; }
+    /* ── INTRODUÇÕES ─────────────────────────────────────────── */
+    .zp-intro-section { margin-bottom:12px; }
+    .zp-intro-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+    .zp-chip { font-size:10px; font-weight:700; padding:1px 8px; border-radius:10px; background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; }
+    .zp-intro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .zp-intro-stat { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 6px; text-align:center; display:flex; flex-direction:column; gap:2px; }
+    .zp-intro-stat strong { font-size:12px; font-weight:800; color:#0f172a; line-height:1; }
+    .zp-intro-stat span   { font-size:9px; color:#94a3b8; }
 
-    /* ── TABELA DE ITENS ─────────────────────────────────────── */
-    .zo-items-block { margin-top:14px; }
-    .zo-items-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-    .zo-items-header__title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
-    .zo-popup--low    .zo-items-header__title { color:#166534; }
-    .zo-popup--medium .zo-items-header__title { color:#92400e; }
-    .zo-popup--high   .zo-items-header__title { color:#991b1b; }
-    .zo-items-header__badge { font-size:10px; font-weight:600; padding:1px 8px; border-radius:10px; color:#fff; }
-    .zo-popup--low    .zo-items-header__badge { background:#16a34a; }
-    .zo-popup--medium .zo-items-header__badge { background:#d97706; }
-    .zo-popup--high   .zo-items-header__badge { background:#dc2626; }
-    .zo-popup--none   .zo-items-header__badge { background:#1a4d8f; }
-    .zo-items-table-wrap { border-radius:8px; overflow:hidden; border:1px solid #f1f5f9; }
-    .zo-popup--low    .zo-items-table-wrap { border-color:#bbf7d0; }
-    .zo-popup--medium .zo-items-table-wrap { border-color:#fde68a; }
-    .zo-popup--high   .zo-items-table-wrap { border-color:#fecaca; }
-    .zo-items-table { width:100%; border-collapse:collapse; font-size:11px; min-width:320px; }
-    .zo-items-table th { padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#fff; text-align:left; white-space:nowrap; }
-    .zo-popup--low    .zo-items-table th { background:#166534; }
-    .zo-popup--medium .zo-items-table th { background:#92400e; }
-    .zo-popup--high   .zo-items-table th { background:#991b1b; }
-    .zo-popup--none   .zo-items-table th { background:#001533; }
-    .zo-items-table td { padding:5px 8px; color:#334155; border-bottom:1px solid #f8fafc; }
-    .zo-items-table tr.alt td { background:#fafafa; }
-    .zo-popup--low    .zo-items-table tr.alt td { background:#f0fdf4; }
-    .zo-popup--medium .zo-items-table tr.alt td { background:#fffbeb; }
-    .zo-popup--high   .zo-items-table tr.alt td { background:#fef2f2; }
-    .zo-items-table tbody tr:last-child td { border-bottom:none; }
-    .zo-items-table th.num, .zo-items-table td.num { text-align:right; }
-    .zo-items-table td.pn   { font-family:monospace; font-size:10px; font-weight:700; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .zo-popup--low    .zo-items-table td.pn { color:#166534; }
-    .zo-popup--medium .zo-items-table td.pn { color:#92400e; }
-    .zo-popup--high   .zo-items-table td.pn { color:#991b1b; }
-    .zo-popup--none   .zo-items-table td.pn { color:#1a4d8f; }
-    .zo-items-table td.bold { font-weight:700; }
-    .zo-items-table td.date { color:#94a3b8; font-size:10px; white-space:nowrap; }
+    /* ── TABELA ──────────────────────────────────────────────── */
+    .zp-table-block { margin-top:12px; }
+    .zp-table-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
+    .zp-table-badge { font-size:10px; font-weight:600; padding:1px 8px; border-radius:10px; background:#001533; color:#fff; }
+    .zp-table-scroll { overflow-x:auto; border-radius:8px; border:1px solid #f1f5f9; }
+    .zp-table { width:100%; border-collapse:collapse; font-size:11px; min-width:320px; }
+    .zp-table th { padding:7px 8px; background:#001533; color:rgba(255,255,255,.85); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; text-align:left; white-space:nowrap; }
+    .zp-table td { padding:5px 8px; color:#334155; border-bottom:1px solid #f8fafc; }
+    .zp-table tr.alt td { background:#fafafa; }
+    .zp-table tbody tr:last-child td { border-bottom:none; }
+    .zp-table th.r, .zp-table td.r { text-align:right; }
+    .zp-table td.mono { font-family:monospace; font-size:10px; font-weight:700; color:#1a4d8f; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .zp-table td.bold  { font-weight:700; }
+    .zp-table td.muted { color:#94a3b8; font-size:10px; white-space:nowrap; }
 
-    /* ── SEM DADOS ───────────────────────────────────────────── */
-    .zo-no-data { display:flex; flex-direction:column; align-items:center; gap:6px; padding:20px; text-align:center; color:#94a3b8; }
-    .zo-no-data p    { font-size:12px; color:#64748b; margin:0; }
-    .zo-no-data span { font-size:11px; }
-    .zo-empty-state  { display:flex; flex-direction:column; align-items:center; gap:8px; padding:32px 20px; text-align:center; }
-    .zo-empty-state__title { font-size:13px; font-weight:700; color:#475569; margin:0; }
-    .zo-empty-state__desc  { font-size:12px; color:#94a3b8; margin:0; max-width:250px; line-height:1.55; }
+    /* ── EMPTY ───────────────────────────────────────────────── */
+    .zp-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:20px; text-align:center; color:#94a3b8; }
+    .zp-empty--center { padding:36px 20px; }
+    .zp-empty p    { font-size:12px; color:#64748b; margin:0; }
+    .zp-empty span { font-size:11px; }
 
     /* ── PROJEÇÃO HERO ───────────────────────────────────────── */
-    .zo-proj-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border:2px solid; border-radius:10px; margin-bottom:14px; }
-    .zo-proj-hero__left { display:flex; flex-direction:column; gap:3px; }
-    .zo-proj-hero__lbl  { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; }
-    .zo-proj-hero__pct  { font-size:30px; font-weight:900; line-height:1; letter-spacing:-.03em; }
-    .zo-proj-hero__status { font-size:11px; font-weight:700; }
-    .zo-proj-hero__right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
-    .zo-proj-hero__vs   { display:flex; align-items:center; gap:8px; }
-    .zo-proj-hero__vs-item { display:flex; flex-direction:column; align-items:center; gap:1px; }
-    .zo-proj-hero__vs-lbl { font-size:9px; color:#94a3b8; }
-    .zo-proj-hero__vs-val { font-size:14px; font-weight:700; }
-    .zo-proj-hero__vs-arr { font-size:16px; color:#cbd5e1; }
-    .zo-proj-hero__delta  { font-size:11px; font-weight:700; padding:2px 8px; background:rgba(0,0,0,.06); border-radius:6px; }
-
-    /* ── BARRAS COMPARATIVAS ─────────────────────────────────── */
-    .zo-compare-block { display:flex; flex-direction:column; gap:7px; margin-bottom:14px; }
-    .zo-compare-row   { display:flex; align-items:center; gap:10px; }
-    .zo-compare-row__lbl { font-size:11px; font-weight:600; color:#94a3b8; min-width:44px; }
+    .zp-proj-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border:1.5px solid; border-radius:10px; margin-bottom:12px; background:#fafafa; }
+    .zp-proj-hero__pct    { font-size:32px; font-weight:900; line-height:1; letter-spacing:-.03em; }
+    .zp-proj-hero__lbl    { font-size:10px; color:#94a3b8; margin-bottom:4px; }
+    .zp-proj-hero__compare{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+    .zp-proj-vs { display:flex; align-items:center; gap:8px; }
+    .zp-proj-vs > span    { font-size:15px; font-weight:700; }
+    .zp-proj-vs__arrow    { color:#cbd5e1; font-size:14px; }
+    .zp-proj-delta        { font-size:11px; font-weight:700; padding:2px 8px; background:rgba(0,0,0,.05); border-radius:6px; }
 
     /* ── FÓRMULA ─────────────────────────────────────────────── */
-    .zo-formula-block { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:12px; }
-    .zo-popup--low    .zo-formula-block { background:#f0fdf4; border-color:#bbf7d0; }
-    .zo-popup--medium .zo-formula-block { background:#fffbeb; border-color:#fde68a; }
-    .zo-popup--high   .zo-formula-block { background:#fef2f2; border-color:#fecaca; }
-    .zo-formula-block__hd { display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; margin-bottom:10px; }
-    .zo-popup--low    .zo-formula-block__hd { color:#166534; }
-    .zo-popup--medium .zo-formula-block__hd { color:#92400e; }
-    .zo-popup--high   .zo-formula-block__hd { color:#991b1b; }
-    .zo-formula-eq { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .zo-formula-term { display:flex; flex-direction:column; align-items:center; gap:2px; background:rgba(255,255,255,.75); border-radius:7px; padding:6px 10px; border:1px solid rgba(0,0,0,.07); }
-    .zo-formula-term--res { border-width:1.5px; }
-    .zo-formula-term__val { font-size:12px; font-weight:800; color:#0f172a; white-space:nowrap; }
-    .zo-formula-term__lbl { font-size:9px; color:#94a3b8; white-space:nowrap; }
-    .zo-formula-op  { font-size:18px; font-weight:700; color:#94a3b8; flex-shrink:0; }
-    .zo-formula-frac { display:flex; flex-direction:column; align-items:center; background:rgba(255,255,255,.75); border-radius:7px; padding:4px 10px; border:1px solid rgba(0,0,0,.07); }
-    .zo-formula-frac__num { font-size:11px; font-weight:700; color:#0f172a; white-space:nowrap; }
-    .zo-formula-frac__den { font-size:11px; font-weight:600; color:#64748b; white-space:nowrap; }
-    .zo-formula-frac__bar { width:100%; height:1.5px; background:#cbd5e1; margin:2px 0; }
-    .zo-formula-note { font-size:10px; color:#94a3b8; margin-top:8px; display:flex; gap:10px; flex-wrap:wrap; }
-
-    /* ── BREAKDOWN ───────────────────────────────────────────── */
-    .zo-breakdown { border:1px solid #f1f5f9; border-radius:10px; overflow:hidden; margin-top:12px; }
-    .zo-popup--low    .zo-breakdown { border-color:#bbf7d0; }
-    .zo-popup--medium .zo-breakdown { border-color:#fde68a; }
-    .zo-popup--high   .zo-breakdown { border-color:#fecaca; }
-    .zo-breakdown__title { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; padding:8px 12px 6px; background:#f8fafc; border-bottom:1px solid #f1f5f9; }
-    .zo-popup--low    .zo-breakdown__title { background:#f0fdf4; color:#166534; }
-    .zo-popup--medium .zo-breakdown__title { background:#fffbeb; color:#92400e; }
-    .zo-popup--high   .zo-breakdown__title { background:#fef2f2; color:#991b1b; }
-    .zo-breakdown__row { display:flex; justify-content:space-between; align-items:center; padding:6px 12px; border-bottom:1px solid #f8fafc; font-size:12px; color:#475569; }
-    .zo-breakdown__row:last-child { border-bottom:none; }
-    .zo-breakdown__row--op    { color:#94a3b8; font-style:italic; }
-    .zo-breakdown__row--sub   { background:#f8fafc; }
-    .zo-breakdown__row--total { padding:9px 12px; border-top:1.5px solid; border-bottom:1.5px solid; }
-    .zo-breakdown__row--pct   { padding:9px 12px; }
+    .zp-formula { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-top:10px; }
+    .zp-formula__title { display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; margin-bottom:10px; }
+    .zp-formula__eq  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .zp-formula__term { display:flex; flex-direction:column; align-items:center; gap:2px; background:#fff; border-radius:7px; padding:6px 10px; border:1px solid #e2e8f0; }
+    .zp-formula__term--res { border-width:1.5px; }
+    .zp-formula__val { font-size:12px; font-weight:800; color:#0f172a; white-space:nowrap; }
+    .zp-formula__lbl { font-size:9px; color:#94a3b8; white-space:nowrap; }
+    .zp-formula__op  { font-size:18px; font-weight:700; color:#cbd5e1; flex-shrink:0; }
+    .zp-formula__frac { display:flex; flex-direction:column; align-items:center; background:#fff; border-radius:7px; padding:4px 10px; border:1px solid #e2e8f0; gap:1px; }
+    .zp-formula__frac > span { font-size:11px; font-weight:700; color:#0f172a; white-space:nowrap; }
+    .zp-formula__frac > span:last-child { font-weight:500; color:#64748b; }
+    .zp-formula__frac-bar { width:100%; height:1px; background:#e2e8f0; margin:1px 0; }
+    .zp-formula__note { font-size:10px; color:#94a3b8; margin-top:8px; }
 
     /* ── BADGES RODAPÉ ───────────────────────────────────────── */
     .wh-trigger-badge { white-space:nowrap; }
 
     /* ── MOBILE ──────────────────────────────────────────────── */
     @media (max-width:480px) {
-      .zo-popup-float { width:calc(100vw - 16px) !important; left:8px !important; max-height:85vh; }
-      .zo-kpi-row     { grid-template-columns:repeat(3,1fr); }
-      .zo-intro-grid  { grid-template-columns:repeat(2,1fr); }
-      .zo-detail-grid { grid-template-columns:1fr 1fr; }
+      .zp-popup { width:calc(100vw - 16px) !important; left:8px !important; max-height:88vh; }
+      .zp-metrics { grid-template-columns:repeat(3,1fr); }
+      .zp-intro-row { grid-template-columns:repeat(2,1fr); }
+      .zp-impact-row { flex-wrap:wrap; }
+      .zp-impact-cell { min-width:calc(50% - 6px); }
+      .zp-impact-op { display:none; }
     }
   `;
   document.head.appendChild(s);
