@@ -1,44 +1,44 @@
 "use strict";
 
 /* ==========================================================================
-   LCB Capacity Analytics — zones-overlay.js v9.2
-   Visual mais sóbrio + bloco de impacto PD na aba Situação Atual.
+   LCB Capacity Analytics — zones-overlay.js v10.0
+   Redesign: paleta Scania navy #041E42, Barlow Condensed, visual industrial
 ========================================================================== */
 
 const OVERLAY_ZONES = {
   "Base 10": {
     id: "base10", label: "Base 10", abbr: "B10",
-    headerColor: "#1a4d8f", defaultCapacity: 35000, defaultOcc: 82,
+    headerColor: "#041e42", defaultCapacity: 35000, defaultOcc: 82,
     hotspots: [{ top: "10.30%", left: "27.35%", width: "49.95%", height: "25.20%", showLabel: true }],
   },
   "Base 20": {
     id: "base20", label: "Base 20", abbr: "B20",
-    headerColor: "#1a4d8f", defaultCapacity: 55200, defaultOcc: 79,
+    headerColor: "#041e42", defaultCapacity: 55200, defaultOcc: 79,
     hotspots: [{ top: "36.40%", left: "27.22%", width: "50.39%", height: "20.82%", showLabel: true }],
   },
   "Blue Box Base 10": {
     id: "bbpalletb10", label: "Blue Box Base 10", abbr: "BBP10",
-    headerColor: "#0e7490", defaultCapacity: 8000, defaultOcc: 74,
+    headerColor: "#041e42", defaultCapacity: 8000, defaultOcc: 74,
     hotspots: [{ top: "58.00%", left: "23.50%", width: "25.50%", height: "11.00%", showLabel: true }],
   },
   "Blue Box Base 20": {
     id: "bbpalletb20", label: "Blue Box Base 20", abbr: "BBP20",
-    headerColor: "#0891b2", defaultCapacity: 8000, defaultOcc: 74,
+    headerColor: "#041e42", defaultCapacity: 8000, defaultOcc: 74,
     hotspots: [{ top: "69.50%", left: "23.50%", width: "25.50%", height: "11.50%", showLabel: true }],
   },
   "Blocado": {
     id: "blocado", label: "Blocado", abbr: "BL",
-    headerColor: "#7c3aed", defaultCapacity: 19800, defaultOcc: 45,
+    headerColor: "#041e42", defaultCapacity: 19800, defaultOcc: 45,
     hotspots: [{ top: "7.10%", left: "77.95%", width: "16.10%", height: "40.40%", showLabel: true }],
   },
   "Blue Box Individual": {
     id: "bbindividual", label: "Blue Box Individual", abbr: "BBI",
-    headerColor: "#0f766e", defaultCapacity: 4200, defaultOcc: 55,
+    headerColor: "#041e42", defaultCapacity: 4200, defaultOcc: 55,
     hotspots: [{ top: "84.20%", left: "24.10%", width: "24.20%", height: "4.80%", showLabel: true }],
   },
   "T;M;4;0;X;90": {
     id: "tm40x90", label: "T;M;4;0;X;90", abbr: "TM",
-    headerColor: "#b91c1c", defaultCapacity: 8000, defaultOcc: 30,
+    headerColor: "#041e42", defaultCapacity: 8000, defaultOcc: 30,
     hotspots: [{ top: "48.50%", left: "77.90%", width: "16.10%", height: "8.10%", showLabel: true }],
   },
 };
@@ -67,6 +67,7 @@ let _activePopupEl     = null;
    UTILS
 ========================================================================== */
 function _strip(v) { return String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+function _cleanPN(v) { const s = String(v ?? "").trim(); return s.replace(/^(\d+)\.0+$/, "$1"); }
 function _norm(v)  { return _strip(v).trim().replace(/\s+/g, " ").toUpperCase(); }
 function _compact(v) { return _norm(v).replace(/\s+/g, ""); }
 
@@ -179,7 +180,7 @@ function _calcOcupacaoFutura(currentOccupied, introVolume, capacity) {
 }
 
 /* ==========================================================================
-   SEVERIDADE
+   SEVERIDADE — paleta Scania
 ========================================================================== */
 function _sev(pct) {
   if (pct == null || !Number.isFinite(+pct)) return "none";
@@ -189,23 +190,13 @@ function _sev(pct) {
 }
 
 const SEV = {
-  low:    { fg: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", label: "Disponível" },
-  medium: { fg: "#d97706", bg: "#fffbeb", border: "#fde68a", label: "Atenção"    },
-  high:   { fg: "#dc2626", bg: "#fef2f2", border: "#fecaca", label: "Crítico"    },
-  none:   { fg: "#64748b", bg: "#f8fafc", border: "#e2e8f0", label: "Sem dados"  },
+  low:    { fg: "#15803d", bg: "#f0fdf4", border: "#86efac", label: "Disponível",  accent: "#16a34a" },
+  medium: { fg: "#b45309", bg: "#fffbeb", border: "#fcd34d", label: "Atenção",     accent: "#d97706" },
+  high:   { fg: "#b91c1c", bg: "#fef2f2", border: "#fca5a5", label: "Crítico",     accent: "#dc2626" },
+  none:   { fg: "#475569", bg: "#f8fafc", border: "#e2e8f0", label: "Sem dados",   accent: "#64748b" },
 };
 
 function _sevCfg(pct) { return SEV[_sev(pct)] ?? SEV.none; }
-
-function _headerGradient(sev) {
-  const g = {
-    low:    "linear-gradient(120deg,#166534,#16a34a)",
-    medium: "linear-gradient(120deg,#92400e,#d97706)",
-    high:   "linear-gradient(120deg,#991b1b,#dc2626)",
-    none:   "linear-gradient(120deg,#1e3a5f,#2563a8)",
-  };
-  return g[sev] ?? g.none;
-}
 
 /* ==========================================================================
    AGREGAÇÃO
@@ -226,7 +217,7 @@ function aggregateByZone(items, opts = {}) {
     if (!g) continue;
     if (projFilter) { const ip = _proj(it); if (ip && _norm(ip) !== projFilter) continue; }
 
-    const pn       = _pn(it);
+    const pn       = _cleanPN(_pn(it));
     const introKey = _periodKey(_intro(it));
     const vol      = Math.max(0, _vol(it));
     const dr       = _dr(it);
@@ -264,8 +255,9 @@ function aggregateByZone(items, opts = {}) {
     const occWithPD    = curOcc + introVolume;
     const occWithPDPct = cap > 0 ? (occWithPD / cap) * 100 : occPct;
 
-    const occupiedTotal = future !== null ? projOcc : occWithPD;
-    const avail = cap > 0 ? Math.max(0, cap - occupiedTotal) : null;
+    /* Disponível = cap - curOcc (sem PD e sem projeção futura)
+       O PD é exibido separadamente no bloco "Impacto da Introdução" */
+    const avail = cap > 0 ? Math.max(0, cap - curOcc) : null;
 
     const sev = _sev(futPct ?? occWithPDPct ?? occPct);
 
@@ -293,10 +285,10 @@ function aggregateByZone(items, opts = {}) {
 }
 
 /* ==========================================================================
-   HTML DO POPUP — v9.2 Clean
+   HTML DO POPUP — v10.0 Scania Design
 ========================================================================== */
 
-/* Barra horizontal simples */
+/* Barra de ocupação com marcadores 70% e 90% */
 function _bar(pct, color) {
   const w = Math.min(100, Math.max(0, pct ?? 0)).toFixed(1);
   return `
@@ -307,7 +299,7 @@ function _bar(pct, color) {
     </div>`;
 }
 
-/* Tabela de itens */
+/* Tabela de itens introduzidos */
 function _tableHtml(details, selPeriod) {
   if (!details?.length) {
     const msg = selPeriod
@@ -333,13 +325,13 @@ function _tableHtml(details, selPeriod) {
           </thead>
           <tbody>
             ${details.map((r, i) => `
-              <tr class="${i % 2 ? "alt" : ""}">
-                <td class="mono">${r.pn || "—"}</td>
+              <tr class="${i % 2 ? "zp-alt" : ""}">
+                <td class="zp-mono">${_cleanPN(r.pn) || "—"}</td>
                 <td>${r.pe || "—"}</td>
                 <td>${r.zone || "—"}</td>
                 <td class="r">${_fmtCx(r.volExcel)}</td>
-                <td class="r bold">${_fmtCx(r.volCalc)}</td>
-                <td class="muted">${r.intro || "—"}</td>
+                <td class="r zp-bold">${_fmtCx(r.volCalc)}</td>
+                <td class="zp-muted">${r.intro || "—"}</td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -347,7 +339,9 @@ function _tableHtml(details, selPeriod) {
     </div>`;
 }
 
-/* Aba Situação Atual — v9.2 */
+/* --------------------------------------------------------------------------
+   ABA: SITUAÇÃO ATUAL
+-------------------------------------------------------------------------- */
 function _tabAtual(m) {
   const sc       = _sevCfg(m.occWithPDPct ?? m.occPct);
   const cap      = m.cap ?? 0;
@@ -355,94 +349,92 @@ function _tabAtual(m) {
   const avPct    = cap > 0 ? Math.max(0, ((m.avail ?? 0) / cap) * 100) : 0;
   const totalOcc = m.curOcc + (m.volIntro ?? 0);
   const totalPct = cap > 0 ? (totalOcc / cap) * 100 : 0;
-  const availColor = (m.avail ?? 0) > 0 ? "#16a34a" : "#dc2626";
+  /* Disponível = cap - curOcc (sem PD) */
+  const availDisplay = cap > 0 ? Math.max(0, cap - m.curOcc) : 0;
+  const availColor = availDisplay > 0 ? "#15803d" : "#b91c1c";
 
   return `
     <div class="zp-pane" id="zp-pane-atual">
 
-      <!-- 3 métricas topo -->
-      <div class="zp-metrics">
-        <div class="zp-metric">
-          <span class="zp-metric__lbl">Capacidade</span>
-          <span class="zp-metric__val">${_fmtMaybe(cap)}</span>
+      <!-- Ficha técnica: 3 métricas em linha horizontal -->
+      <div class="zp-kpi-row">
+        <div class="zp-kpi">
+          <span class="zp-kpi__lbl">Capacidade</span>
+          <span class="zp-kpi__val">${_fmtMaybe(cap)}</span>
         </div>
-        <div class="zp-metric">
-          <span class="zp-metric__lbl">Ocupado hoje</span>
-          <span class="zp-metric__val" style="color:${sc.fg}">${_fmtCx(m.curOcc)}</span>
-          <span class="zp-metric__sub">${(m.occPct ?? 0).toFixed(1)}% da cap.</span>
+        <div class="zp-kpi-div"></div>
+        <div class="zp-kpi">
+          <span class="zp-kpi__lbl">Ocupado hoje</span>
+          <span class="zp-kpi__val" style="color:${sc.accent}">${_fmtCx(m.curOcc)}</span>
+          <span class="zp-kpi__sub">${(m.occPct ?? 0).toFixed(1)}% da cap.</span>
         </div>
-        <div class="zp-metric">
-          <span class="zp-metric__lbl">Disponível</span>
-          <span class="zp-metric__val" style="color:${availColor}">${_fmtMaybe(m.avail)}</span>
-          <span class="zp-metric__sub">${avPct.toFixed(1)}% livre</span>
+        <div class="zp-kpi-div"></div>
+        <div class="zp-kpi">
+          <span class="zp-kpi__lbl">Disponível</span>
+          <span class="zp-kpi__val" style="color:${availColor}">${_fmtCx(availDisplay)}</span>
+          <span class="zp-kpi__sub">${(cap > 0 ? (availDisplay/cap*100) : 0).toFixed(1)}% livre</span>
         </div>
       </div>
 
       <!-- Régua de ocupação -->
-      <div class="zp-occ-section">
-        <div class="zp-occ-label">
-          <span>Nível de ocupação</span>
-          <span class="zp-badge" style="color:${sc.fg};background:${sc.bg};border-color:${sc.border}">
+      <div class="zp-occ-block">
+        <div class="zp-occ-header">
+          <span class="zp-occ-header__label">Nível de ocupação</span>
+          <span class="zp-status-pill" style="color:${sc.fg};background:${sc.bg};border-color:${sc.border}">
             ${sc.label} · ${pct.toFixed(1)}%
           </span>
         </div>
-        ${_bar(pct, sc.fg)}
-        <div class="zp-occ-legend">
-          <span><span class="zp-dot" style="background:${sc.fg}"></span>Ocupado hoje${m.volIntro > 0 ? " + PD" : ""}</span>
-          <span class="muted" style="display:flex;align-items:center;gap:8px">
-            <span style="display:flex;align-items:center;gap:3px">
-              <span style="width:2px;height:10px;background:#d97706;display:inline-block;border-radius:1px"></span>70%
-            </span>
-            <span style="display:flex;align-items:center;gap:3px">
-              <span style="width:2px;height:10px;background:#dc2626;display:inline-block;border-radius:1px"></span>90%
-            </span>
+        ${_bar(pct, sc.accent)}
+        <div class="zp-occ-footer">
+          <span class="zp-occ-footer__dot" style="background:${sc.accent}"></span>
+          <span>Ocupado hoje${m.volIntro > 0 ? " + PD" : ""}</span>
+          <span class="zp-occ-footer__marks">
+            <span class="zp-mark zp-mark--warn">70%</span>
+            <span class="zp-mark zp-mark--crit">90%</span>
           </span>
         </div>
       </div>
 
-      <!-- Bloco: Impacto da Introdução (PD) -->
-      <div class="zp-impact-block">
-        <div class="zp-impact-title">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Impacto da Introdução (PD)
-        </div>
-        <div class="zp-impact-row">
-          <div class="zp-impact-cell">
-            <span class="zp-impact-cell__lbl">Ocupado hoje</span>
-            <span class="zp-impact-cell__val">${_fmtCx(m.curOcc)}</span>
-            <span class="zp-impact-cell__pct">${(m.occPct ?? 0).toFixed(1)}%</span>
+      <!-- Impacto PD: equação horizontal -->
+      <div class="zp-impact">
+        <div class="zp-impact__title">Impacto da Introdução (PD)</div>
+        <div class="zp-impact__eq">
+          <div class="zp-impact__cell">
+            <span class="zp-impact__cell-lbl">Ocupado hoje</span>
+            <span class="zp-impact__cell-val">${_fmtCx(m.curOcc)}</span>
+            <span class="zp-impact__cell-pct">${(m.occPct ?? 0).toFixed(1)}% ocup.</span>
           </div>
-          <div class="zp-impact-op">+</div>
-          <div class="zp-impact-cell zp-impact-cell--pd">
-            <span class="zp-impact-cell__lbl">Introdução PD</span>
-            <span class="zp-impact-cell__val" style="color:#d97706">${_fmtCx(m.volIntro ?? 0)}</span>
-            <span class="zp-impact-cell__pct">${m.volIntro > 0 && cap > 0 ? ((m.volIntro / cap) * 100).toFixed(1) + "%" : "—"}</span>
+          <span class="zp-impact__op">+</span>
+          <div class="zp-impact__cell zp-impact__cell--pd">
+            <span class="zp-impact__cell-lbl">Introdução PD</span>
+            <span class="zp-impact__cell-val" style="color:#b45309">${_fmtCx(m.volIntro ?? 0)}</span>
+            <span class="zp-impact__cell-pct">${m.volIntro > 0 && cap > 0 ? ((m.volIntro / cap) * 100).toFixed(1) + "%" : "—"}</span>
           </div>
-          <div class="zp-impact-op">=</div>
-          <div class="zp-impact-cell zp-impact-cell--total" style="border-color:${sc.fg}40">
-            <span class="zp-impact-cell__lbl">Total projetado</span>
-            <span class="zp-impact-cell__val" style="color:${sc.fg}">${_fmtCx(totalOcc)}</span>
-            <span class="zp-impact-cell__pct" style="color:${sc.fg};font-weight:700">${totalPct.toFixed(1)}%</span>
+          <span class="zp-impact__op">=</span>
+          <div class="zp-impact__cell zp-impact__cell--total" style="border-left:3px solid ${sc.accent}">
+            <span class="zp-impact__cell-lbl">Total projetado</span>
+            <span class="zp-impact__cell-val" style="color:${sc.fg}">${_fmtCx(totalOcc)}</span>
+            <span class="zp-impact__cell-pct" style="color:${sc.fg};font-weight:700">${totalPct.toFixed(1)}%</span>
           </div>
         </div>
       </div>
 
-      <!-- Introduções resumo -->
-      <div class="zp-intro-section">
-        <div class="zp-intro-title">
+      <!-- Introduções resumo: 3 stats em linha -->
+      <div class="zp-intro">
+        <div class="zp-intro__header">
           Introduções até o período
-          ${m.selPeriod ? `<span class="zp-chip">${m.selPeriod}</span>` : ""}
+          ${m.selPeriod ? `<span class="zp-period-chip">${m.selPeriod}</span>` : ""}
         </div>
-        <div class="zp-intro-row">
-          <div class="zp-intro-stat">
-            <strong>${m.pnCount}</strong><span>Part Numbers</span>
+        <div class="zp-intro__stats">
+          <div class="zp-intro__stat">
+            <strong>${m.pnCount}</strong>
+            <span>Part Numbers</span>
           </div>
-          <div class="zp-intro-stat">
-            <strong>${_fmtCx(m.volIntro)}</strong><span>Volume</span>
+          <div class="zp-intro__stat">
+            <strong>${_fmtCx(m.volIntro)}</strong>
+            <span>Volume</span>
           </div>
-          <div class="zp-intro-stat">
-            <strong>${m.avgDr}</strong><span>Daily Rate médio</span>
-          </div>
+
         </div>
       </div>
 
@@ -450,59 +442,56 @@ function _tabAtual(m) {
     </div>`;
 }
 
-/* Aba Projeção Futura */
+/* --------------------------------------------------------------------------
+   ABA: PROJEÇÃO FUTURA
+-------------------------------------------------------------------------- */
 function _tabProj(m) {
   const prodHoje   = m.prodHoje   ?? 0;
-  const prodFutura = m.prodFutura ?? 0;
+  const prodFutura = m.prodFuturo ?? 0;
 
   if (!prodHoje) {
     return `
       <div class="zp-pane" id="zp-pane-proj">
         <div class="zp-empty zp-empty--center">
-          <p><strong>Projeção não disponível</strong></p>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p>Projeção não disponível</p>
           <span>Informe o <strong>Vol. Atual</strong> (veíc./dia) no controle do mapa para ativar o cálculo.</span>
         </div>
       </div>`;
   }
 
-  const futSc  = _sevCfg(m.futPct);
-  const curSc  = _sevCfg(m.occPct);
-  const fator  = (prodFutura / prodHoje).toFixed(2);
-  const delta  = m.futPct != null && m.occPct != null ? (m.futPct - m.occPct) : null;
-  const deltaStr = delta != null
-    ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} pp`
-    : "—";
-  const deltaColor = delta == null ? "#94a3b8" : delta > 2 ? "#dc2626" : delta < -2 ? "#16a34a" : "#64748b";
+  const futSc    = _sevCfg(m.futPct);
+  const curSc    = _sevCfg(m.occPct);
+  const delta    = m.futPct != null && m.occPct != null ? (m.futPct - m.occPct) : null;
+  const deltaStr = delta != null ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} pp` : "—";
+  const deltaColor = delta == null ? "#94a3b8" : delta > 2 ? "#b91c1c" : delta < -2 ? "#15803d" : "#475569";
 
   return `
     <div class="zp-pane" id="zp-pane-proj">
 
-      <!-- Hero: % futuro -->
+      <!-- Hero numérico: % futuro grande + comparativo -->
       ${m.futPct != null ? `
-        <div class="zp-proj-hero" style="border-color:${futSc.border}">
-          <div>
-            <div class="zp-proj-hero__pct" style="color:${futSc.fg}">${m.futPct.toFixed(1)}%</div>
-            <div class="zp-proj-hero__lbl">Ocupação futura projetada</div>
-            <span class="zp-badge" style="color:${futSc.fg};background:${futSc.bg};border-color:${futSc.border}">${futSc.label}</span>
+        <div class="zp-proj-hero" style="border-left:4px solid ${futSc.accent}">
+          <div class="zp-proj-hero__main">
+            <span class="zp-proj-hero__pct" style="color:${futSc.fg}">${m.futPct.toFixed(1)}%</span>
+            <span class="zp-proj-hero__lbl">Ocupação futura projetada</span>
+            <span class="zp-status-pill" style="color:${futSc.fg};background:${futSc.bg};border-color:${futSc.border}">${futSc.label}</span>
           </div>
           <div class="zp-proj-hero__compare">
-            <div class="zp-proj-vs">
-              <span style="color:${curSc.fg}">${(m.occPct ?? 0).toFixed(1)}%</span>
-              <span class="zp-proj-vs__arrow">→</span>
-              <span style="color:${futSc.fg};font-weight:800">${m.futPct.toFixed(1)}%</span>
-            </div>
+            <span class="zp-proj-vs">
+              <span style="color:${curSc.accent}">${(m.occPct ?? 0).toFixed(0)}%</span>
+              <span class="zp-proj-vs__arr">→</span>
+              <span style="color:${futSc.fg};font-weight:800">${m.futPct.toFixed(0)}%</span>
+            </span>
             <span class="zp-proj-delta" style="color:${deltaColor}">${deltaStr}</span>
           </div>
         </div>
-        ${_bar(m.futPct, futSc.fg)}
+        ${_bar(m.futPct, futSc.accent)}
       ` : ""}
 
-      <!-- Fórmula -->
+      <!-- Fórmula de projeção: estilo ficha técnica -->
       <div class="zp-formula">
-        <div class="zp-formula__title">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Fórmula de projeção
-        </div>
+        <div class="zp-formula__title">Fórmula de projeção</div>
         <div class="zp-formula__eq">
           <div class="zp-formula__term">
             <span class="zp-formula__val">${_fmtCx(m.curOcc)}</span>
@@ -511,76 +500,80 @@ function _tabProj(m) {
           <span class="zp-formula__op">×</span>
           <div class="zp-formula__frac">
             <span>${_fmtVeic(prodFutura)}</span>
-            <span class="zp-formula__frac-bar"></span>
+            <div class="zp-formula__frac-bar"></div>
             <span>${_fmtVeic(prodHoje)}</span>
           </div>
           <span class="zp-formula__op">=</span>
-          <div class="zp-formula__term zp-formula__term--res" style="border-color:${futSc.border}">
+          <div class="zp-formula__term zp-formula__term--res" style="border-color:${futSc.border};background:${futSc.bg}">
             <span class="zp-formula__val" style="color:${futSc.fg}">${_fmtCx(m.baseProjected)}</span>
-            <span class="zp-formula__lbl">Ocup. base futura</span>
+            <span class="zp-formula__lbl" style="color:${futSc.fg}">Ocup. base futura</span>
           </div>
-        </div>
-        <div class="zp-formula__note">
-          Fator ${fator}×
-          ${m.volIntro > 0 ? `· +${_fmtCx(m.volIntro)} introduções Excel` : "· sem introduções no período"}
+          ${m.volIntro > 0 ? `
+          <span class="zp-formula__op" style="font-size:13px;color:#94a3b8">+${_fmtCx(m.volIntro)}</span>` : ""}
         </div>
       </div>
 
     </div>`;
 }
 
-/* Popup principal */
+/* --------------------------------------------------------------------------
+   POPUP PRINCIPAL — header navy Scania, sem gradiente colorido
+-------------------------------------------------------------------------- */
 function _buildPopupHtml(zoneName, m) {
-  const mainSev = m.futPct != null ? _sev(m.futPct) : _sev(m.occWithPDPct ?? m.occPct);
-  const sc      = SEV[mainSev] ?? SEV.none;
+  const mainSev  = m.futPct != null ? _sev(m.futPct) : _sev(m.occWithPDPct ?? m.occPct);
+  const sc       = SEV[mainSev] ?? SEV.none;
   const todayPct = Math.min(100, m.occWithPDPct ?? m.occPct ?? 0);
-  const futPct   = m.futPct != null ? Math.min(100, m.futPct) : null;
+  const futPct   = m.futPct != null ? m.futPct : null;  /* sem cap — permite exibir >100% */
   const period   = m.selPeriod ? `Até ${m.selPeriod}` : "Todos os períodos";
 
   return `
-    <!-- CABEÇALHO -->
-    <div class="zp-hd" style="background:${_headerGradient(mainSev)}">
-      <div class="zp-hd__info">
-        <span class="zp-hd__name">${zoneName}</span>
+    <!-- HEADER — navy Scania consistente, status via pill -->
+    <div class="zp-hd">
+      <div class="zp-hd__left">
+        <div class="zp-hd__zone-row">
+          <span class="zp-hd__name">${zoneName}</span>
+        </div>
         <span class="zp-hd__period">${period}</span>
       </div>
       <div class="zp-hd__right">
-        <div class="zp-hd__pcts">
-          <span class="zp-hd__pct-lbl">Hoje</span>
-          <span class="zp-hd__pct-val">${(m.occWithPDPct ?? m.occPct ?? 0).toFixed(0)}%</span>
+        <div class="zp-hd__stats">
+          <div class="zp-hd__stat">
+            <span class="zp-hd__stat-lbl">Hoje + PD</span>
+            <span class="zp-hd__stat-val">${(m.occWithPDPct ?? m.occPct ?? 0).toFixed(0)}%</span>
+          </div>
           ${futPct != null ? `
-            <span class="zp-hd__pct-sep">→</span>
-            <span class="zp-hd__pct-lbl">Futuro</span>
-            <span class="zp-hd__pct-val zp-hd__pct-val--fut">${futPct.toFixed(0)}%</span>` : ""}
+          <span class="zp-hd__stat-sep">→</span>
+          <div class="zp-hd__stat">
+            <span class="zp-hd__stat-lbl">Futuro</span>
+            <span class="zp-hd__stat-val zp-hd__stat-val--fut">${futPct.toFixed(0)}%</span>
+          </div>` : ""}
         </div>
-        <span class="zp-hd__status">${sc.label}</span>
+        <span class="zp-hd__status-pill" style="color:${sc.fg};background:${sc.bg};border-color:${sc.border}">${sc.label}</span>
         <button class="zp-hd__close" type="button" aria-label="Fechar">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
       </div>
     </div>
 
-    <!-- MINI GAUGE NO HEADER -->
-    <div class="zp-hd-gauge">
-      <div class="zp-hd-gauge__today" style="width:${todayPct.toFixed(1)}%;background:${sc.fg}44"></div>
-      ${futPct != null ? `<div class="zp-hd-gauge__fut" style="width:${futPct.toFixed(1)}%;border-right:2px solid ${sc.fg}"></div>` : ""}
+    <!-- GAUGE — barra fina sob o header -->
+    <div class="zp-gauge">
+      <div class="zp-gauge__fill" style="width:${todayPct.toFixed(1)}%;background:${sc.accent}"></div>
+      ${futPct != null ? `<div class="zp-gauge__fut" style="width:${Math.min(100,futPct).toFixed(1)}%;border-right:2px solid ${sc.accent}88"></div>` : ""}
     </div>
 
-    <!-- ABAS -->
+    <!-- ABAS — linha única, sem fundo cinza -->
     <div class="zp-tabs">
       <button class="zp-tab zp-tab--active" data-tab="atual" type="button">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Situação Atual
-        <span class="zp-tab__pill" style="color:${SEV[_sev(m.occWithPDPct ?? m.occPct)].fg}">
+        <span class="zp-tab__num" style="color:${SEV[_sev(m.occWithPDPct ?? m.occPct)].accent}">
           ${(m.occWithPDPct ?? m.occPct ?? 0).toFixed(0)}%
         </span>
       </button>
       <button class="zp-tab" data-tab="proj" type="button">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         Projeção Futura
-        ${m.futPct != null ? `<span class="zp-tab__pill" style="color:${SEV[_sev(m.futPct)].fg}">${m.futPct.toFixed(0)}%</span>` : ""}
+        ${m.futPct != null ? `<span class="zp-tab__num" style="color:${SEV[_sev(m.futPct)].accent}">${m.futPct.toFixed(0)}%</span>` : ""}
       </button>
     </div>
 
@@ -616,13 +609,23 @@ function _positionPopup(popup, hotspot) {
   const ph  = popup.offsetHeight || 520;
   const GAP = 10;
 
-  let left = hr.right + GAP;
+  /* Tenta abrir à esquerda do hotspot primeiro (padrão) */
+  let left = hr.left - pw - GAP;
   let top  = hr.top + hr.height / 2 - ph / 2;
 
-  if (left + pw > vw - GAP) left = hr.left - pw - GAP;
-  if (left < GAP)            left = Math.max(GAP, hr.left + hr.width / 2 - pw / 2);
-  top  = Math.max(GAP, Math.min(top,  vh - ph - GAP));
+  /* Se não couber à esquerda, tenta à direita */
+  if (left < GAP) left = hr.right + GAP;
+
+  /* Se ainda não couber à direita, centraliza horizontalmente */
+  if (left + pw > vw - GAP) left = Math.max(GAP, vw / 2 - pw / 2);
+
+  /* Vertical: alinha ao topo do hotspot se o popup não couber centralizado */
+  if (top < GAP) top = GAP;
+  if (top + ph > vh - GAP) top = Math.max(GAP, vh - ph - GAP);
+
+  /* Garante dentro da viewport */
   left = Math.max(GAP, Math.min(left, vw - pw - GAP));
+  top  = Math.max(GAP, Math.min(top,  vh - ph - GAP));
 
   popup.style.left = `${left}px`;
   popup.style.top  = `${top}px`;
@@ -660,7 +663,7 @@ function _ensureListeners() {
 }
 
 /* ==========================================================================
-   HOTSPOT
+   HOTSPOT — visual limpo, borda colorida por status
 ========================================================================== */
 function _createHotspot(zoneName, cfg, hotspotCfg, m, map) {
   const sevCls    = m.sev === "none" ? "low" : m.sev;
@@ -691,7 +694,7 @@ function _createHotspot(zoneName, cfg, hotspotCfg, m, map) {
     <span class="zo-hs__name">${zoneName}</span>
     <span class="zo-hs__rate">${mainLbl}${trendIcon}</span>
     ${isFuture ? `<span class="zo-hs__tag">projeção</span>` : ""}
-    <span class="zo-hs__dot" style="background:${sc.fg}" aria-hidden="true"></span>`;
+    <span class="zo-hs__dot" style="background:${sc.accent}" aria-hidden="true"></span>`;
 
   hs.addEventListener("click", e => {
     e.stopPropagation();
@@ -817,232 +820,450 @@ function setOverlayContext(ctx = {}) {
 function getOverlayContext() { return { ..._state }; }
 
 /* ==========================================================================
-   CSS INJETADO — v9.2 Clean
+   CSS INJETADO — v10.0 Scania Design System
+   Header: navy #041E42 consistente (sem gradiente colorido por status)
+   Fonte: Barlow Condensed para valores, Barlow para labels
+   Border-radius: 6px — linguagem industrial Scania
 ========================================================================== */
 (function _injectStyles() {
-  if (document.getElementById("zo-styles-v92")) return;
-  ["zo-styles-v91","zo-styles-v90","zo-styles-v82","zo-styles-v81","zo-styles-v8","zo-future-styles","zo-styles-v5"]
+  if (document.getElementById("zo-styles-v100")) return;
+  /* Remove versões anteriores */
+  ["zo-styles-v92","zo-styles-v91","zo-styles-v90","zo-styles-v82","zo-styles-v81",
+   "zo-styles-v8","zo-future-styles","zo-styles-v5"]
     .forEach(id => document.getElementById(id)?.remove());
 
   const s = document.createElement("style");
-  s.id = "zo-styles-v92";
+  s.id = "zo-styles-v100";
   s.textContent = `
-
-    /* ── HOTSPOT ─────────────────────────────────────────────── */
+    /* ═══ HOTSPOT ═══════════════════════════════════════════════════════════ */
     .zo-hotspot {
       position:absolute; display:flex; flex-direction:column;
       align-items:center; justify-content:center; gap:3px;
-      background:transparent; border:3px solid transparent;
-      border-radius:8px; cursor:pointer; padding:6px 8px; z-index:3;
-      transition:border-color .15s,background .15s,box-shadow .15s;
+      background:transparent; border:2.5px solid transparent;
+      border-radius:6px; cursor:pointer; padding:5px 7px; z-index:3;
+      transition:border-color .14s, background .14s, box-shadow .14s;
     }
-    .zo-hotspot--low    { border-color:rgba(22,163,74,.95);  background:rgba(22,163,74,.16);  }
-    .zo-hotspot--medium { border-color:rgba(217,119,6,.96);  background:rgba(217,119,6,.17);  }
-    .zo-hotspot--high   { border-color:rgba(220,38,38,.96);  background:rgba(220,38,38,.17);  }
-    .zo-hotspot:hover   { transform:scale(1.01); }
-    .zo-hotspot--open   { box-shadow:inset 0 0 0 2px rgba(255,255,255,.62),0 0 0 2px rgba(0,21,51,.34); }
-    .zo-hs__name,.zo-hs__rate { color:#001533; background:rgba(255,255,255,.9); border:1px solid rgba(255,255,255,.95); border-radius:5px; padding:2px 6px; line-height:1.2; }
-    .zo-hs__name { font-size:11px; font-weight:900; }
-    .zo-hs__rate { font-size:16px; font-weight:800; padding:2px 8px; display:flex; align-items:center; gap:3px; }
-    .zo-hs__tag  { font-size:9px; font-weight:600; text-transform:uppercase; color:rgba(0,21,51,.6); background:rgba(255,255,255,.75); border-radius:3px; padding:1px 4px; }
-    .zo-hs__dot  { width:10px; height:10px; border-radius:50%; border:2px solid #fff; }
-    .zo-hs__trend { font-size:12px; font-weight:700; }
-    .zo-hs__trend--up { color:#dc2626; }
-    .zo-hs__trend--dn { color:#16a34a; }
+    .zo-hotspot--low    { border-color:rgba(21,128,61,1);   background:rgba(22,163,74,.25); }
+    .zo-hotspot--medium { border-color:rgba(180,83,9,1);    background:rgba(217,119,6,.25); }
+    .zo-hotspot--high   { border-color:rgba(185,28,28,1);   background:rgba(220,38,38,.25); }
+    .zo-hotspot:hover   { transform:scale(1.02); filter:brightness(.92); }
+    .zo-hotspot--open   {
+      box-shadow:0 0 0 3px rgba(4,30,66,.4);
+      border-color:rgba(4,30,66,.9) !important;
+      background:rgba(4,30,66,.18) !important;
+    }
+    .zo-hs__name, .zo-hs__rate {
+      color:#001533;
+      background:rgba(255,255,255,.97);
+      border:1.5px solid rgba(255,255,255,1);
+      border-radius:4px; padding:2px 6px; line-height:1.2;
+      box-shadow:0 1px 4px rgba(0,0,0,.25);
+      font-family:'ScaniaSans','Segoe UI',sans-serif;
+    }
+    .zo-hs__name { font-size:10px; font-weight:800; letter-spacing:.02em; }
+    .zo-hs__rate { font-size:15px; font-weight:800; padding:2px 8px; display:flex; align-items:center; gap:3px; }
+    .zo-hs__tag  { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:rgba(0,21,51,.55); background:rgba(255,255,255,.78); border-radius:3px; padding:1px 5px; }
+    .zo-hs__dot  { width:9px; height:9px; border-radius:50%; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+    .zo-hs__trend { font-size:11px; font-weight:700; }
+    .zo-hs__trend--up { color:#b91c1c; }
+    .zo-hs__trend--dn { color:#15803d; }
     .zo-hs__trend--eq { color:#94a3b8; }
 
-    /* ── POPUP ───────────────────────────────────────────────── */
+    /* ── PD: dois blocos lado a lado ───────────────────────── */
+    .zo-hs__pcts {
+      display:flex; align-items:center; gap:5px;
+    }
+    .zo-hs__pct-block {
+      display:flex; flex-direction:column; align-items:center; gap:1px;
+      background:rgba(255,255,255,.95);
+      border:1.5px solid rgba(255,255,255,1);
+      border-radius:4px; padding:3px 7px;
+      box-shadow:0 1px 4px rgba(0,0,0,.2);
+    }
+    .zo-hs__pct-block--pd {
+      background:rgba(255,251,235,.97);
+      border-color:rgba(217,119,6,.5);
+    }
+    .zo-hs__pct-lbl {
+      font-family:'ScaniaSans','Segoe UI',sans-serif;
+      font-size:8px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.06em;
+      color:#64748b; line-height:1;
+    }
+    .zo-hs__pct-sep {
+      font-size:11px; font-weight:700; color:rgba(0,21,51,.4);
+      flex-shrink:0;
+    }
+    .zo-hs__pd-val {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:15px; font-weight:800; color:#b45309; line-height:1;
+    }
+    .zo-hs__pd-badge {
+      font-family:'ScaniaSans','Segoe UI',sans-serif;
+      font-size:8px; font-weight:700;
+      color:#b45309; line-height:1;
+    }
+
+    /* ═══ POPUP ══════════════════════════════════════════════════════════════ */
     .zp-popup {
       position:fixed; z-index:9999;
       width:380px; max-height:88vh;
       display:flex; flex-direction:column; overflow:hidden;
-      background:#fff; border-radius:12px;
-      border:1.5px solid #e2e8f0;
-      box-shadow:0 20px 50px rgba(0,0,0,.16),0 6px 16px rgba(0,0,0,.10);
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      animation:zp-in .17s cubic-bezier(.22,.68,0,1.15) forwards;
+      background:#fff;
+      border-radius:6px;
+      border:1px solid #dde2e9;
+      box-shadow:0 16px 48px rgba(4,30,66,.18), 0 4px 12px rgba(4,30,66,.10);
+      font-family:'ScaniaSans','Segoe UI',system-ui,sans-serif;
+      font-size:13px;
+      animation:zp-in .15s cubic-bezier(.22,.68,0,1.12) forwards;
     }
-    @keyframes zp-in { from{opacity:0;transform:translateY(6px) scale(.97)} to{opacity:1;transform:none} }
-    .zp-popup--low    { border-color:#bbf7d0; }
-    .zp-popup--medium { border-color:#fde68a; }
-    .zp-popup--high   { border-color:#fecaca; }
+    @keyframes zp-in {
+      from { opacity:0; transform:translateY(6px) scale(.97); }
+      to   { opacity:1; transform:none; }
+    }
 
-    /* ── HEADER ──────────────────────────────────────────────── */
+    /* ═══ HEADER — navy Scania, sem gradiente por status ════════════════════ */
     .zp-hd {
       display:flex; align-items:center; justify-content:space-between;
-      padding:14px 16px 10px; flex-shrink:0; border-radius:10px 10px 0 0;
+      gap:12px; padding:14px 16px 12px;
+      background:#041e42;
+      flex-shrink:0;
     }
-    .zp-hd__info { display:flex; flex-direction:column; gap:3px; }
-    .zp-hd__name { font-size:16px; font-weight:800; color:#fff; letter-spacing:-.02em; }
-    .zp-hd__period { font-size:11px; color:rgba(255,255,255,.6); }
-    .zp-hd__right { display:flex; align-items:center; gap:10px; }
-    .zp-hd__pcts { display:flex; align-items:baseline; gap:5px; }
-    .zp-hd__pct-lbl { font-size:10px; color:rgba(255,255,255,.55); }
-    .zp-hd__pct-val { font-size:15px; font-weight:800; color:#fff; }
-    .zp-hd__pct-val--fut { opacity:.85; }
-    .zp-hd__pct-sep { color:rgba(255,255,255,.4); font-size:12px; }
-    .zp-hd__status { font-size:11px; font-weight:600; color:rgba(255,255,255,.8); background:rgba(0,0,0,.2); padding:3px 9px; border-radius:20px; white-space:nowrap; }
+    .zp-hd__left { display:flex; flex-direction:column; gap:4px; min-width:0; }
+    .zp-hd__zone-row { display:flex; align-items:center; gap:8px; }
+    .zp-hd__abbr {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:10px; font-weight:800;
+      letter-spacing:.10em; text-transform:uppercase;
+      color:rgba(255,255,255,.45);
+      background:rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:3px; padding:2px 7px; flex-shrink:0;
+    }
+    .zp-hd__name {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:17px; font-weight:700; color:#fff;
+      letter-spacing:.01em; text-transform:uppercase;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .zp-hd__period {
+      font-size:11px; color:rgba(255,255,255,.5);
+      font-weight:400; letter-spacing:.02em;
+    }
+    .zp-hd__right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    .zp-hd__stats { display:flex; align-items:baseline; gap:5px; }
+    .zp-hd__stat { display:flex; flex-direction:column; align-items:center; gap:1px; }
+    .zp-hd__stat-lbl { font-size:9px; color:rgba(255,255,255,.45); text-transform:uppercase; letter-spacing:.07em; }
+    .zp-hd__stat-val {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:18px; font-weight:700; color:#fff; line-height:1;
+    }
+    .zp-hd__stat-val--fut { opacity:.75; }
+    .zp-hd__stat-sep { font-size:13px; color:rgba(255,255,255,.3); padding:0 2px; }
+    .zp-hd__status-pill {
+      font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+      padding:3px 9px; border-radius:3px; border:1px solid; white-space:nowrap;
+    }
     .zp-hd__close {
-      background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
-      border-radius:6px; color:rgba(255,255,255,.7); cursor:pointer;
-      padding:5px 7px; display:flex; align-items:center; transition:background .12s;
+      background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.2);
+      border-radius:4px; color:rgba(255,255,255,.65);
+      cursor:pointer; padding:5px 6px;
+      display:flex; align-items:center;
+      transition:background .12s, color .12s;
+      flex-shrink:0;
     }
-    .zp-hd__close:hover { background:rgba(255,255,255,.28); color:#fff; }
+    .zp-hd__close:hover { background:rgba(255,255,255,.2); color:#fff; }
 
-    /* mini gauge */
-    .zp-hd-gauge { position:relative; height:3px; flex-shrink:0; background:rgba(0,0,0,.08); }
-    .zp-hd-gauge__today { position:absolute; top:0; left:0; height:100%; transition:width .4s; }
-    .zp-hd-gauge__fut   { position:absolute; top:0; left:0; height:100%; background:transparent; transition:width .4s; }
+    /* Gauge — barra fina sob o header */
+    .zp-gauge {
+      position:relative; height:3px; flex-shrink:0;
+      background:rgba(4,30,66,.12);
+    }
+    .zp-gauge__fill { position:absolute; top:0; left:0; height:100%; transition:width .45s; }
+    .zp-gauge__fut  { position:absolute; top:0; left:0; height:100%; background:transparent; transition:width .45s; }
 
-    /* ── ABAS ────────────────────────────────────────────────── */
-    .zp-tabs { display:flex; border-bottom:1px solid #f1f5f9; background:#fafafa; flex-shrink:0; }
+    /* ═══ ABAS — linha limpa sem fundo cinza ════════════════════════════════ */
+    .zp-tabs {
+      display:flex;
+      border-bottom:1px solid #e2e8f0;
+      flex-shrink:0;
+      background:#fff;
+    }
     .zp-tab {
-      flex:1; display:flex; align-items:center; justify-content:center; gap:5px;
-      padding:10px 8px; font-size:12px; font-weight:500; color:#64748b;
+      flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+      padding:9px 10px;
+      font-family:'ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:12px; font-weight:500; color:#475569;
       background:none; border:none; border-bottom:2px solid transparent;
-      cursor:pointer; transition:color .12s, border-color .12s; white-space:nowrap;
+      cursor:pointer;
+      transition:color .12s, border-color .12s;
+      white-space:nowrap;
     }
-    .zp-tab:hover { color:#0f172a; }
-    .zp-popup--low    .zp-tab--active { color:#166534; border-bottom-color:#16a34a; font-weight:700; }
-    .zp-popup--medium .zp-tab--active { color:#78350f; border-bottom-color:#d97706; font-weight:700; }
-    .zp-popup--high   .zp-tab--active { color:#7f1d1d; border-bottom-color:#dc2626; font-weight:700; }
-    .zp-popup--none   .zp-tab--active { color:#1e3a5f; border-bottom-color:#2563a8; font-weight:700; }
-    .zp-tab__pill {
-      font-size:10px; font-weight:700;
-      padding:1px 7px; border-radius:10px;
-      background:rgba(0,0,0,.06);
+    .zp-tab:hover { color:#041e42; }
+    .zp-tab--active {
+      color:#041e42; font-weight:700;
+      border-bottom-color:#041e42;
+    }
+    .zp-tab__num {
+      font-family:'ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:12px; font-weight:800;
+      padding:1px 7px; border-radius:3px;
+      background:#f0f3f7;
     }
 
-    /* ── BODY ────────────────────────────────────────────────── */
-    .zp-body { overflow-y:auto; flex:1; scrollbar-width:thin; scrollbar-color:#e2e8f0 transparent; }
+    /* ═══ BODY ═══════════════════════════════════════════════════════════════ */
+    .zp-body {
+      overflow-y:auto; flex:1;
+      scrollbar-width:thin; scrollbar-color:#dde2e9 transparent;
+    }
+    .zp-body::-webkit-scrollbar       { width:4px; }
+    .zp-body::-webkit-scrollbar-track { background:transparent; }
+    .zp-body::-webkit-scrollbar-thumb { background:#dde2e9; border-radius:2px; }
     .zp-pane { padding:14px 16px 16px; }
 
-    /* ── MÉTRICAS (sóbrias — sem fundo colorido) ─────────────── */
-    .zp-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
-    .zp-metric {
-      background:#f8fafc; border:1px solid #e2e8f0; border-radius:9px;
-      padding:10px 10px 8px; display:flex; flex-direction:column; gap:2px;
+    /* ═══ KPI ROW — ficha técnica horizontal ════════════════════════════════ */
+    .zp-kpi-row {
+      display:flex; align-items:stretch;
+      border:1px solid #e2e8f0; border-radius:5px;
+      margin-bottom:14px; overflow:hidden;
     }
-    .zp-metric__lbl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
-    .zp-metric__val { font-size:13px; font-weight:800; color:#0f172a; line-height:1.1; }
-    .zp-metric__sub { font-size:10px; color:#94a3b8; }
-
-    /* ── BADGE INLINE ────────────────────────────────────────── */
-    .zp-badge {
-      display:inline-flex; align-items:center;
-      font-size:10px; font-weight:700; padding:2px 8px;
-      border-radius:10px; border:1px solid; white-space:nowrap;
-    }
-
-    /* ── BARRA ───────────────────────────────────────────────── */
-    .zp-occ-section { margin-bottom:12px; }
-    .zp-occ-label { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
-    .zp-bar { position:relative; height:8px; background:#f1f5f9; border-radius:4px; overflow:visible; margin-bottom:5px; }
-    .zp-bar__fill { height:100%; border-radius:4px; transition:width .5s; }
-    .zp-bar__m70 { position:absolute; top:-4px; bottom:-4px; left:70%; width:2px; background:#d97706; border-radius:1px; z-index:2; }
-    .zp-bar__m90 { position:absolute; top:-4px; bottom:-4px; left:90%; width:2px; background:#dc2626; border-radius:1px; z-index:2; }
-    .zp-occ-legend { display:flex; align-items:center; justify-content:space-between; font-size:10px; color:#94a3b8; gap:6px; }
-    .zp-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; }
-    .muted { color:#94a3b8; }
-
-    /* ── IMPACTO PD ──────────────────────────────────────────── */
-    .zp-impact-block {
-      margin-bottom:14px;
-      background:#f8fafc;
-      border:1px solid #e2e8f0;
-      border-radius:10px;
+    .zp-kpi {
+      flex:1; display:flex; flex-direction:column; gap:2px;
       padding:10px 12px;
     }
-    .zp-impact-title {
-      display:flex; align-items:center; gap:5px;
+    .zp-kpi-div { width:1px; background:#e2e8f0; flex-shrink:0; }
+    .zp-kpi__lbl {
       font-size:9px; font-weight:700;
-      text-transform:uppercase; letter-spacing:.07em;
+      text-transform:uppercase; letter-spacing:.08em; color:#94a3b8;
+    }
+    .zp-kpi__val {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:14px; font-weight:700; color:#041e42; line-height:1.1;
+    }
+    .zp-kpi__sub { font-size:10px; color:#94a3b8; }
+
+    /* ═══ OCUPAÇÃO ═══════════════════════════════════════════════════════════ */
+    .zp-occ-block { margin-bottom:14px; }
+    .zp-occ-header {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:7px;
+    }
+    .zp-occ-header__label {
+      font-size:10px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.07em; color:#94a3b8;
+    }
+    .zp-status-pill {
+      font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+      padding:2px 9px; border-radius:3px; border:1px solid; white-space:nowrap;
+    }
+    .zp-bar {
+      position:relative; height:7px;
+      background:#f0f3f7; border-radius:3px; overflow:visible;
+      margin-bottom:6px;
+    }
+    .zp-bar__fill { height:100%; border-radius:3px; transition:width .45s; }
+    .zp-bar__m70 {
+      position:absolute; top:-3px; bottom:-3px; left:70%;
+      width:2px; background:#d97706; border-radius:1px; z-index:2;
+    }
+    .zp-bar__m90 {
+      position:absolute; top:-3px; bottom:-3px; left:90%;
+      width:2px; background:#dc2626; border-radius:1px; z-index:2;
+    }
+    .zp-occ-footer {
+      display:flex; align-items:center; gap:6px;
+      font-size:10px; color:#64748b;
+    }
+    .zp-occ-footer__dot {
+      width:7px; height:7px; border-radius:50%; flex-shrink:0;
+    }
+    .zp-occ-footer__marks { margin-left:auto; display:flex; gap:8px; }
+    .zp-mark {
+      display:flex; align-items:center; gap:3px;
+      font-size:10px; font-weight:600; color:#94a3b8;
+    }
+    .zp-mark::before {
+      content:""; display:inline-block;
+      width:2px; height:9px; border-radius:1px;
+    }
+    .zp-mark--warn::before { background:#d97706; }
+    .zp-mark--crit::before { background:#dc2626; }
+
+    /* ═══ IMPACTO PD ═════════════════════════════════════════════════════════ */
+    .zp-impact {
+      background:#f8fafc; border:1px solid #e2e8f0; border-radius:5px;
+      padding:10px 12px; margin-bottom:14px;
+    }
+    .zp-impact__title {
+      font-size:9px; font-weight:800;
+      text-transform:uppercase; letter-spacing:.08em;
       color:#94a3b8; margin-bottom:10px;
     }
-    .zp-impact-row {
-      display:flex; align-items:center; gap:6px;
-    }
-    .zp-impact-cell {
+    .zp-impact__eq { display:flex; align-items:center; gap:6px; }
+    .zp-impact__cell {
       flex:1; background:#fff; border:1px solid #e2e8f0;
-      border-radius:8px; padding:8px 10px;
+      border-radius:4px; padding:8px 10px;
       display:flex; flex-direction:column; gap:2px;
     }
-    .zp-impact-cell--pd    { border-color:#fde68a; background:#fffbeb; }
-    .zp-impact-cell--total { border-width:1.5px; }
-    .zp-impact-cell__lbl {
+    .zp-impact__cell--pd    { border-color:#fcd34d; background:#fffbeb; }
+    .zp-impact__cell--total { background:#f8fafc; }
+    .zp-impact__cell-lbl {
       font-size:9px; font-weight:700;
-      text-transform:uppercase; letter-spacing:.05em; color:#94a3b8;
+      text-transform:uppercase; letter-spacing:.06em; color:#94a3b8;
     }
-    .zp-impact-cell__val { font-size:13px; font-weight:800; color:#0f172a; line-height:1.1; }
-    .zp-impact-cell__pct { font-size:10px; color:#94a3b8; }
-    .zp-impact-op { font-size:18px; font-weight:700; color:#cbd5e1; flex-shrink:0; }
+    .zp-impact__cell-val {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:13px; font-weight:700; color:#041e42; line-height:1.1;
+    }
+    .zp-impact__cell-pct { font-size:10px; color:#94a3b8; }
+    .zp-impact__op {
+      font-size:16px; font-weight:700; color:#cbd5e1; flex-shrink:0;
+      font-family:'ScaniaSans','Segoe UI',sans-serif;
+    }
 
-    /* ── INTRODUÇÕES ─────────────────────────────────────────── */
-    .zp-intro-section { margin-bottom:12px; }
-    .zp-intro-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
-    .zp-chip { font-size:10px; font-weight:700; padding:1px 8px; border-radius:10px; background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; }
-    .zp-intro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-    .zp-intro-stat { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 6px; text-align:center; display:flex; flex-direction:column; gap:2px; }
-    .zp-intro-stat strong { font-size:12px; font-weight:800; color:#0f172a; line-height:1; }
-    .zp-intro-stat span   { font-size:9px; color:#94a3b8; }
+    /* ═══ INTRODUÇÕES ════════════════════════════════════════════════════════ */
+    .zp-intro { margin-bottom:14px; }
+    .zp-intro__header {
+      display:flex; align-items:center; gap:8px;
+      font-size:10px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.07em;
+      color:#64748b; margin-bottom:8px;
+    }
+    .zp-period-chip {
+      font-family:'ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:10px; font-weight:700;
+      padding:2px 8px; border-radius:3px;
+      background:#041e42; color:#fff;
+      letter-spacing:.03em;
+    }
+    .zp-intro__stats {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:6px;
+    }
+    .zp-intro__stat {
+      background:#f8fafc; border:1px solid #e2e8f0;
+      border-radius:4px; padding:8px 6px;
+      text-align:center; display:flex; flex-direction:column; gap:2px;
+    }
+    .zp-intro__stat strong {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:13px; font-weight:700; color:#041e42; line-height:1;
+    }
+    .zp-intro__stat span { font-size:9px; color:#94a3b8; }
 
-    /* ── TABELA ──────────────────────────────────────────────── */
+    /* ═══ TABELA ═════════════════════════════════════════════════════════════ */
     .zp-table-block { margin-top:12px; }
-    .zp-table-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
-    .zp-table-badge { font-size:10px; font-weight:600; padding:1px 8px; border-radius:10px; background:#001533; color:#fff; }
-    .zp-table-scroll { overflow-x:auto; border-radius:8px; border:1px solid #f1f5f9; }
-    .zp-table { width:100%; border-collapse:collapse; font-size:11px; min-width:320px; }
-    .zp-table th { padding:7px 8px; background:#001533; color:rgba(255,255,255,.85); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; text-align:left; white-space:nowrap; }
-    .zp-table td { padding:5px 8px; color:#334155; border-bottom:1px solid #f8fafc; }
-    .zp-table tr.alt td { background:#fafafa; }
+    .zp-table-header {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:6px;
+      font-size:9px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.08em; color:#94a3b8;
+    }
+    .zp-table-badge {
+      font-size:10px; font-weight:600; padding:2px 8px;
+      border-radius:3px; background:#041e42; color:#fff;
+      font-family:'ScaniaSans','Segoe UI',sans-serif;
+    }
+    .zp-table-scroll { overflow-x:auto; border-radius:5px; border:1px solid #e2e8f0; }
+    .zp-table { width:100%; border-collapse:collapse; font-size:11px; min-width:300px; }
+    .zp-table th {
+      padding:7px 8px; background:#041e42;
+      color:rgba(255,255,255,.82);
+      font-size:9px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.06em;
+      text-align:left; white-space:nowrap;
+    }
+    .zp-table th:first-child { border-radius:4px 0 0 0; }
+    .zp-table th:last-child  { border-radius:0 4px 0 0; }
+    .zp-table td { padding:5px 8px; color:#334155; border-bottom:1px solid #f1f5f9; }
+    .zp-table tr.zp-alt td { background:#f8fafc; }
     .zp-table tbody tr:last-child td { border-bottom:none; }
+    .zp-table tbody tr:hover td { background:#eef4fb; }
     .zp-table th.r, .zp-table td.r { text-align:right; }
-    .zp-table td.mono { font-family:monospace; font-size:10px; font-weight:700; color:#1a4d8f; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .zp-table td.bold  { font-weight:700; }
-    .zp-table td.muted { color:#94a3b8; font-size:10px; white-space:nowrap; }
+    .zp-table td.zp-mono {
+      font-family:monospace; font-size:10px; font-weight:700;
+      color:#041e42; max-width:76px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .zp-table td.zp-bold  { font-weight:700; }
+    .zp-table td.zp-muted { color:#94a3b8; font-size:10px; white-space:nowrap; }
 
-    /* ── EMPTY ───────────────────────────────────────────────── */
-    .zp-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:20px; text-align:center; color:#94a3b8; }
-    .zp-empty--center { padding:36px 20px; }
-    .zp-empty p    { font-size:12px; color:#64748b; margin:0; }
-    .zp-empty span { font-size:11px; }
+    /* ═══ EMPTY ══════════════════════════════════════════════════════════════ */
+    .zp-empty {
+      display:flex; flex-direction:column; align-items:center;
+      gap:8px; padding:24px 20px; text-align:center; color:#94a3b8;
+    }
+    .zp-empty--center { padding:40px 20px; }
+    .zp-empty p    { font-size:12px; color:#475569; margin:0; font-weight:600; }
+    .zp-empty span { font-size:11px; color:#94a3b8; max-width:240px; line-height:1.5; }
 
-    /* ── PROJEÇÃO HERO ───────────────────────────────────────── */
-    .zp-proj-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border:1.5px solid; border-radius:10px; margin-bottom:12px; background:#fafafa; }
-    .zp-proj-hero__pct    { font-size:32px; font-weight:900; line-height:1; letter-spacing:-.03em; }
-    .zp-proj-hero__lbl    { font-size:10px; color:#94a3b8; margin-bottom:4px; }
-    .zp-proj-hero__compare{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
-    .zp-proj-vs { display:flex; align-items:center; gap:8px; }
-    .zp-proj-vs > span    { font-size:15px; font-weight:700; }
-    .zp-proj-vs__arrow    { color:#cbd5e1; font-size:14px; }
-    .zp-proj-delta        { font-size:11px; font-weight:700; padding:2px 8px; background:rgba(0,0,0,.05); border-radius:6px; }
+    /* ═══ PROJEÇÃO HERO ══════════════════════════════════════════════════════ */
+    .zp-proj-hero {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:14px 14px 14px 16px;
+      border:1px solid #e2e8f0; border-radius:5px;
+      margin-bottom:12px; background:#f8fafc;
+    }
+    .zp-proj-hero__main { display:flex; flex-direction:column; gap:4px; }
+    .zp-proj-hero__pct  {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:34px; font-weight:700; line-height:1; letter-spacing:-.01em;
+    }
+    .zp-proj-hero__lbl  { font-size:10px; color:#94a3b8; }
+    .zp-proj-hero__compare { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+    .zp-proj-vs {
+      display:flex; align-items:center; gap:6px;
+      font-family:'ScaniaSans','Segoe UI',sans-serif;
+    }
+    .zp-proj-vs > span   { font-size:16px; font-weight:700; }
+    .zp-proj-vs__arr     { color:#cbd5e1; font-size:13px; }
+    .zp-proj-delta {
+      font-size:11px; font-weight:700;
+      padding:2px 8px; background:rgba(0,0,0,.05); border-radius:3px;
+    }
 
-    /* ── FÓRMULA ─────────────────────────────────────────────── */
-    .zp-formula { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-top:10px; }
-    .zp-formula__title { display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; margin-bottom:10px; }
-    .zp-formula__eq  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .zp-formula__term { display:flex; flex-direction:column; align-items:center; gap:2px; background:#fff; border-radius:7px; padding:6px 10px; border:1px solid #e2e8f0; }
+    /* ═══ FÓRMULA ════════════════════════════════════════════════════════════ */
+    .zp-formula {
+      background:#f8fafc; border:1px solid #e2e8f0;
+      border-radius:5px; padding:12px 14px; margin-top:10px;
+    }
+    .zp-formula__title {
+      font-size:9px; font-weight:800;
+      text-transform:uppercase; letter-spacing:.08em;
+      color:#94a3b8; margin-bottom:10px;
+    }
+    .zp-formula__eq { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+    .zp-formula__term {
+      display:flex; flex-direction:column; align-items:center; gap:2px;
+      background:#fff; border-radius:4px; padding:6px 10px; border:1px solid #e2e8f0;
+    }
     .zp-formula__term--res { border-width:1.5px; }
-    .zp-formula__val { font-size:12px; font-weight:800; color:#0f172a; white-space:nowrap; }
-    .zp-formula__lbl { font-size:9px; color:#94a3b8; white-space:nowrap; }
-    .zp-formula__op  { font-size:18px; font-weight:700; color:#cbd5e1; flex-shrink:0; }
-    .zp-formula__frac { display:flex; flex-direction:column; align-items:center; background:#fff; border-radius:7px; padding:4px 10px; border:1px solid #e2e8f0; gap:1px; }
-    .zp-formula__frac > span { font-size:11px; font-weight:700; color:#0f172a; white-space:nowrap; }
-    .zp-formula__frac > span:last-child { font-weight:500; color:#64748b; }
-    .zp-formula__frac-bar { width:100%; height:1px; background:#e2e8f0; margin:1px 0; }
-    .zp-formula__note { font-size:10px; color:#94a3b8; margin-top:8px; }
+    .zp-formula__val {
+      font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+      font-size:12px; font-weight:700; color:#041e42; white-space:nowrap;
+    }
+    .zp-formula__lbl  { font-size:9px; color:#94a3b8; white-space:nowrap; }
+    .zp-formula__op   {
+      font-size:16px; font-weight:700; color:#cbd5e1; flex-shrink:0;
+      font-family:'ScaniaSans','Segoe UI',sans-serif;
+    }
+    .zp-formula__frac {
+      display:flex; flex-direction:column; align-items:center;
+      background:#fff; border-radius:4px; padding:4px 10px;
+      border:1px solid #e2e8f0; gap:1px;
+    }
+    .zp-formula__frac > span { font-size:11px; font-weight:600; color:#041e42; white-space:nowrap; }
+    .zp-formula__frac > span:last-child { font-weight:400; color:#64748b; }
+    .zp-formula__frac-bar { width:100%; height:1px; background:#e2e8f0; margin:2px 0; }
 
-    /* ── BADGES RODAPÉ ───────────────────────────────────────── */
-    .wh-trigger-badge { white-space:nowrap; }
-
-    /* ── MOBILE ──────────────────────────────────────────────── */
+    /* ═══ MOBILE ═════════════════════════════════════════════════════════════ */
     @media (max-width:480px) {
-      .zp-popup { width:calc(100vw - 16px) !important; left:8px !important; max-height:88vh; }
-      .zp-metrics { grid-template-columns:repeat(3,1fr); }
-      .zp-intro-row { grid-template-columns:repeat(2,1fr); }
-      .zp-impact-row { flex-wrap:wrap; }
-      .zp-impact-cell { min-width:calc(50% - 6px); }
-      .zp-impact-op { display:none; }
+      .zp-popup       { width:calc(100vw - 16px) !important; left:8px !important; max-height:88vh; }
+      .zp-kpi-row     { flex-direction:column; }
+      .zp-kpi-div     { width:100%; height:1px; }
+      .zp-intro__stats{ grid-template-columns:repeat(2,1fr); }
+      .zp-impact__eq  { flex-wrap:wrap; }
+      .zp-impact__cell{ min-width:calc(50% - 10px); }
+      .zp-impact__op  { display:none; }
     }
   `;
   document.head.appendChild(s);

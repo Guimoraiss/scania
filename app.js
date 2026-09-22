@@ -76,7 +76,7 @@ const ICONS = {
 ========================================================================= */
 const State = {
   periodIndex:         0,
-  productionVolume:    75,
+  productionVolume:    0,
   currentPage:         "analise",
   selectedProject:     "todos",
   selectedProjectName: "",
@@ -473,7 +473,7 @@ function renderSliderProgress(periodIndex) {
   const pct  = (periodIndex / Number(rangeEl.max)) * 100;
   const fill = el("sliderProgress");
   if (fill) {
-    fill.style.cssText = `position:absolute;left:0;top:50%;transform:translateY(-50%);height:6px;width:${pct}%;background:var(--color-brand-900);border-radius:3px;pointer-events:none;z-index:0;`;
+    fill.style.cssText = `position:absolute;left:0;top:50%;transform:translateY(-50%);height:6px;width:${pct}%;background:var(--color-brand-800);border-radius:3px;pointer-events:none;z-index:0;`;
   }
 }
 
@@ -578,6 +578,13 @@ function drawerNumber(...values) {
   return 0;
 }
 function drawerText(value, fallback="—") { return String(value??"").trim() || fallback; }
+
+/* Remove o .0 que o SheetJS adiciona quando lê PNs numéricos como float */
+function cleanPN(value) {
+  const s = String(value ?? "").trim();
+  /* Se terminar em .0 e for só números, remove o decimal */
+  return s.replace(/^(\d+)\.0+$/, "$1");
+}
 function escapeDrawerHtml(value) {
   return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
@@ -606,7 +613,6 @@ function buildRealZoneRows(rows, result) {
     });
   }
 
-  // Capacidades e ocupações preenchidas manualmente na tela principal
   const MANUAL_CAPACITIES = {
     "BASE 10":             Number(el("caLcbCapPortaPalletsB10")?.value)   || 0,
     "BASE 20":             Number(el("caLcbCapPortaPalletsB20")?.value)   || 0,
@@ -703,7 +709,7 @@ const Drawer = {
               return `<div class="drawer-zone-card drawer-zone-card--${zone.status}">
                 <div class="drawer-zone-card__header">${dot(zone.status)}<span class="drawer-zone-card__name">${escapeDrawerHtml(zone.name)}</span><span style="margin-left:auto;color:#64748b;font-size:.68rem">${zone.itemCount} item(ns)</span><span class="drawer-zone-card__rate">${rL}</span></div>
                 <div class="drawer-zone-card__bar"><div class="drawer-zone-card__bar-fill drawer-zone-card__bar-fill--base" style="width:${bw.toFixed(1)}%"></div><div class="drawer-zone-card__bar-fill drawer-zone-card__bar-fill--added" style="width:${aw.toFixed(1)}%;left:${bw.toFixed(1)}%"></div></div>
-                <div class="drawer-zone-card__stats"><span><span class="dz-label">Capacidade</span><strong>${cL}</strong></span><span><span class="dz-label">Volume PD</span><strong>${fmt.int(Math.round(zone.volumePD))} cx</strong></span><span><span class="dz-label">Bloqueado</span><strong>${fmt.int(Math.round(zone.blocked))} cx</strong></span><span><span class="dz-label">Disponível</span><strong>${aL}</strong></span></div>
+                <div class="drawer-zone-card__stats"><span><span class="dz-label">Capacidade</span><strong>${cL}</strong></span><span><span class="dz-label">Volume PD</span><strong>${fmt.int(Math.round(zone.volumePD))} cx</strong></span><span><span class="dz-label">Disponível</span><strong>${aL}</strong></span></div>
               </div>`;
             }).join("")}</div>`
           : `<div class="drawer-empty"><span class="drawer-empty__icon">📦</span><p>Nenhuma zona identificada.</p></div>`}
@@ -724,7 +730,7 @@ const Drawer = {
               const raw=row.cxs_periodo;
               const excel=raw!=null&&raw!==""?drawerNumber(raw):calc;
               const impact=cap>0?((calc/cap)*100).toFixed(2).replace(".",","):"0,00";
-              return `<tr><td class="drawer-table__pn">${escapeDrawerHtml(drawerText(row.pn??row.part_number))}</td><td>${escapeDrawerHtml(drawerText(row.desc??row.descricao))}</td><td>${escapeDrawerHtml(drawerText(row.pe??row.pckg_type))}</td><td class="num">${fmt.int(Math.round(excel))}</td><td class="num"><strong>${fmt.int(Math.round(calc))}</strong></td><td>${escapeDrawerHtml(drawerText(row.storage_zone??row.storageZone))}</td><td>${escapeDrawerHtml(drawerText(row.introduction_date))}</td><td class="num">${fmt.dec(drawerNumber(row.dr,row.daily_rate))}</td><td class="num">${fmt.int(Math.round(drawerNumber(row.volC,row.volume_contratado)))}</td><td class="num">${fmt.int(Math.round(drawerNumber(row.bloqueado)))}</td><td>${escapeDrawerHtml(drawerText(row.origem))}</td><td>${escapeDrawerHtml(drawerText(row.calculo_fonte))}</td><td class="num drawer-table__impact">${impact}%</td></tr>`;
+              return `<tr><td class="drawer-table__pn">${escapeDrawerHtml(cleanPN(row.pn??row.part_number))}</td><td>${escapeDrawerHtml(drawerText(row.desc??row.descricao))}</td><td>${escapeDrawerHtml(drawerText(row.pe??row.pckg_type))}</td><td class="num">${fmt.int(Math.round(excel))}</td><td class="num"><strong>${fmt.int(Math.round(calc))}</strong></td><td>${escapeDrawerHtml(drawerText(row.storage_zone??row.storageZone))}</td><td>${escapeDrawerHtml(drawerText(row.introduction_date))}</td><td class="num">${fmt.dec(drawerNumber(row.dr,row.daily_rate))}</td><td class="num">${fmt.int(Math.round(drawerNumber(row.volC,row.volume_contratado)))}</td><td class="num">${fmt.int(Math.round(drawerNumber(row.bloqueado)))}</td><td>${escapeDrawerHtml(drawerText(row.origem))}</td><td>${escapeDrawerHtml(drawerText(row.calculo_fonte))}</td><td class="num drawer-table__impact">${impact}%</td></tr>`;
             }).join("")}</tbody>
             <tfoot><tr><td colspan="3">Totais</td><td class="num">${fmt.int(Math.round(totExcel))}</td><td class="num">${fmt.int(Math.round(totCalc))}</td><td colspan="3">—</td><td class="num">${fmt.int(Math.round(totContracted))}</td><td class="num">${fmt.int(Math.round(totBlocked))}</td><td colspan="3">—</td></tr></tfoot>
           </table>
@@ -830,7 +836,7 @@ function renderDonutChart(result) {
   if (cenLbl) cenLbl.textContent = "caixas";
   const labels = ["Ocupação Atual","Aumento PD Analisado","Margem de Segurança","Disponível"];
   const values = [currOcc,volPD,margin,avail];
-  const colors = ["#123b70","#16a34a","#d97706","#e2e8f0"];
+  const colors = ["#041e42","#16a34a","#d97706","#e2e8f0"];
   const legendEl = el("caDonutLegendList");
   if (legendEl) {
     legendEl.innerHTML = labels.map((l,i)=>`
@@ -843,8 +849,8 @@ function renderDonutChart(result) {
   const data = { labels, datasets:[{data:values,backgroundColor:colors,borderColor:["#fff","#fff","#fff","#fff"],borderWidth:2,hoverOffset:4}] };
   const opts = {
     responsive:true,maintainAspectRatio:false,cutout:"68%",
-    plugins:{legend:{display:false},tooltip:{backgroundColor:"#001533",bodyColor:"#fff",padding:10,cornerRadius:8,callbacks:{label(ctx){const pct=cap>0?((ctx.parsed/cap)*100).toFixed(1):"0,0";return ` ${ctx.label}: ${Number(ctx.parsed).toLocaleString("pt-BR")} cx (${pct}%)`;},},},},
-    animation:{duration:600,easing:"easeOutQuart"},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:"#041e42",bodyColor:"#fff",padding:10,cornerRadius:4,callbacks:{label(ctx){const pct=cap>0?((ctx.parsed/cap)*100).toFixed(1):"0,0";return ` ${ctx.label}: ${Number(ctx.parsed).toLocaleString("pt-BR")} cx (${pct}%)`;},},},},
+    animation:{duration:500,easing:"easeOutQuart"},
   };
   if (_donutChart) { _donutChart.data=data; _donutChart.options=opts; _donutChart.update(); }
   else { _donutChart = new Chart(canvas,{type:"doughnut",data,options:opts}); }
@@ -967,7 +973,7 @@ function handleCalcClick() {
       const rawItems   = Array.isArray(simulation.itens) ? simulation.itens : [];
       State.lastRows = rawItems.map((item) => ({
         ...item,
-        pn:item.part_number??item.pn??"", desc:item.descricao??item.desc??"",
+        pn:cleanPN(item.part_number??item.pn??""), desc:item.descricao??item.desc??"",
         pe:item.pckg_type??item.pe??"", dr:item.daily_rate??item.dr??0,
         volC:item.volume_contratado??item.volC??0, cxs_periodo:item.cxs_periodo??null,
         calc:item.volume_calculado_periodo??item.cxs_periodo??0,
@@ -1002,116 +1008,6 @@ function handleCalcClick() {
   );
 }
 
-/* =========================================================================
-   PAINEL DE ORIGEM — Nacional / Importado / China
-========================================================================= */
-function renderOrigemPanel(rows) {
-  const container = el("caOrigemPanel");
-  if (!container) return;
-
-  const ORIGEM_CONFIG = {
-    nacional:  { label: "Nacional",  color: "#0e7490", bg: "rgba(14,116,144,.08)",  dias: 9  },
-    importado: { label: "Importado", color: "#d97706", bg: "rgba(217,119,6,.08)",   dias: 15 },
-    china:     { label: "China",     color: "#dc2626", bg: "rgba(220,38,38,.08)",   dias: 25 },
-  };
-
-  const grupos = {
-    nacional:  { total: 0, count: 0 },
-    importado: { total: 0, count: 0 },
-    china:     { total: 0, count: 0 },
-  };
-
-  const porProjeto = {};
-
-  (rows || []).forEach(row => {
-    const origemRaw = String(row.origem || "").trim().toLowerCase();
-    const vol       = Number(row.calc ?? row.volume_calculado_periodo ?? row.cxs_periodo ?? 0) || 0;
-    const proj      = String(row.projeto || row.desc || "Sem Projeto").trim();
-
-    let chave = null;
-    if (origemRaw.includes("china"))          chave = "china";
-    else if (origemRaw.includes("importado")) chave = "importado";
-    else if (origemRaw.includes("nacional"))  chave = "nacional";
-
-    if (!chave) return;
-
-    grupos[chave].total += vol;
-    grupos[chave].count += 1;
-
-    if (!porProjeto[proj]) porProjeto[proj] = { nacional: 0, importado: 0, china: 0 };
-    porProjeto[proj][chave] += 1;
-  });
-
-  const totalGeral = grupos.nacional.total + grupos.importado.total + grupos.china.total;
-  const totalItens = grupos.nacional.count + grupos.importado.count + grupos.china.count;
-
-  if (totalGeral === 0 && totalItens === 0) {
-    container.innerHTML = `<p class="ca-origem-empty">Coluna Origem não preenchida neste projeto.</p>`;
-    return;
-  }
-
-  const kpiCards = Object.entries(ORIGEM_CONFIG).map(([chave, cfg]) => {
-    const dados = grupos[chave];
-    const pct   = totalItens > 0 ? (dados.count / totalItens * 100).toFixed(1) : "0";
-    return `
-      <div class="ca-origem-kpi" style="--ok:${cfg.color};--bg:${cfg.bg}">
-        <span class="ca-origem-kpi__dot" style="background:${cfg.color}"></span>
-        <span class="ca-origem-kpi__label">${cfg.label}</span>
-        <strong class="ca-origem-kpi__count">${dados.count.toLocaleString("pt-BR")}</strong>
-        <span class="ca-origem-kpi__pct">${pct}%</span>
-      </div>`;
-  }).join("");
-
-  const projetos = Object.keys(porProjeto);
-  const maxItens = Math.max(...projetos.map(p =>
-    porProjeto[p].nacional + porProjeto[p].importado + porProjeto[p].china
-  ), 1);
-
-  const barras = projetos.map(proj => {
-    const d   = porProjeto[proj];
-    const tot = d.nacional + d.importado + d.china;
-    const pN  = (d.nacional  / maxItens * 100).toFixed(1);
-    const pI  = (d.importado / maxItens * 100).toFixed(1);
-    const pC  = (d.china     / maxItens * 100).toFixed(1);
-    const label = proj.length > 14 ? proj.slice(0, 13) + "…" : proj;
-    return `
-      <div class="ca-origem-bar-group">
-        <div class="ca-origem-bar-track">
-          ${d.nacional  > 0 ? `<div class="ca-origem-bar-seg" style="height:${pN}%;background:#0e7490" title="${d.nacional} Nacional"></div>` : ""}
-          ${d.importado > 0 ? `<div class="ca-origem-bar-seg" style="height:${pI}%;background:#d97706" title="${d.importado} Importado"></div>` : ""}
-          ${d.china     > 0 ? `<div class="ca-origem-bar-seg" style="height:${pC}%;background:#dc2626" title="${d.china} China"></div>` : ""}
-        </div>
-        <span class="ca-origem-bar-total">${tot}</span>
-        <span class="ca-origem-bar-label">${label}</span>
-      </div>`;
-  }).join("");
-
-  const legenda = Object.entries(ORIGEM_CONFIG).map(([, cfg]) => `
-    <span class="ca-origem-legend-item">
-      <span class="ca-origem-legend-dot" style="background:${cfg.color}"></span>
-      <span class="ca-origem-legend-label">${cfg.label}</span>
-      <span class="ca-origem-legend-dias">${cfg.dias}d</span>
-    </span>`).join("");
-
-  container.innerHTML = `
-    <div class="ca-origem-lead-time">
-      LEAD TIME
-      ${Object.entries(ORIGEM_CONFIG).map(([, c]) =>
-        `<span style="color:${c.color}">● ${c.label} ${c.dias}d</span>`
-      ).join("")}
-    </div>
-    <div class="ca-origem-kpis">${kpiCards}</div>
-    <div class="ca-origem-chart">
-      <div class="ca-origem-chart__bars">${barras}</div>
-      <div class="ca-origem-chart__yaxis">
-        <span>${maxItens}</span>
-        <span>${Math.round(maxItens/2)}</span>
-        <span>0</span>
-      </div>
-    </div>
-    <div class="ca-origem-legend">${legenda}</div>`;
-}
-
 function renderAll(result) {
   State.lastResult  = result;
   State.hasRealData = true;
@@ -1122,7 +1018,6 @@ function renderAll(result) {
   renderCAVerdict(result);
   renderCAKpis(result);
   renderDonutChart(result);
-  renderOrigemPanel(State.lastRows);
   renderEngine(result);
   renderCARecommendation(result);
   _showResultPanels();
@@ -1140,7 +1035,19 @@ function runLocalCACalculation() {
 /* =========================================================================
    EVENTOS DE ANÁLISE
 ========================================================================= */
+function _setCalcBtnState(enabled) {
+  const btn = el("btnCalcAnalise");
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.style.opacity    = enabled ? "1"        : "0.45";
+  btn.style.cursor     = enabled ? "pointer"  : "not-allowed";
+  btn.title            = enabled ? ""         : "Carregue um arquivo Excel de PD antes de calcular";
+}
+
 function initAnalise() {
+  /* Botão começa bloqueado — libera só com arquivo carregado */
+  _setCalcBtnState(false);
+
   if (!_calcListenerAttached) {
     el("btnCalcAnalise")?.addEventListener("click", handleCalcClick);
     _calcListenerAttached = true;
@@ -1169,6 +1076,7 @@ function initAnalise() {
     uploadZone?.classList.remove("upload-error");
     uploadZone?.classList.add("file-loaded");
     if (uploadLabel) uploadLabel.innerHTML=`<span class="upload-zone__filename">✓ ${file.name}</span><span class="upload-zone__meta">${(file.size/1024).toFixed(1)} KB · Pronto para calcular</span>`;
+    _setCalcBtnState(true);
   }
   excelInput?.addEventListener("change", e => applyFile(e.target.files?.[0]));
   uploadZone?.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("drag-over"); });
@@ -1203,7 +1111,7 @@ function init() {
     State.lastRows = buildMockRows(bootstrapResult);
     renderWarehouseOverlay(State.lastRows,{...bootstrapResult,selectedPeriod:PERIODS[State.periodIndex],project:State.selectedProject});
     showPage("analise");
-    console.info("[LCB] v8.3 — Capacidades manuais no drawer");
+    console.info("[LCB] v8.4 — Redesign Scania + Origem redesenhado");
   } catch (err) {
     console.error("[LCB] Erro na inicialização:", err);
   }

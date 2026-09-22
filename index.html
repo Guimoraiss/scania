@@ -4,9 +4,168 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LCB Capacity Analytics | Scania</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="Style.css">
+  <style>
+    #uploadProgressWrap{margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px}
+    .upload-progress__header{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+    .upload-progress__label{font-size:12px;font-weight:600;color:#0f172a}
+    .upload-progress__pct{font-size:12px;font-weight:700;color:#1d4ed8;min-width:32px;text-align:right}
+    .upload-progress__track{width:100%;height:7px;background:#e2e8f0;border-radius:4px;overflow:hidden}
+    .upload-progress__fill{height:100%;width:0%;background:#1d4ed8;border-radius:4px;transition:width .22s ease-out,background .3s}
+
+    #langWrap{position:relative;display:flex;align-items:center;margin-right:10px}
+    #langBtn{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.28);border-radius:6px;color:#e2e8f0;font-size:12px;font-weight:700;letter-spacing:.05em;padding:5px 11px;cursor:pointer;font-family:inherit;white-space:nowrap}
+    #langBtn:hover{background:rgba(255,255,255,.2)}
+    #langDd{display:none;position:fixed;background:#1e293b;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:4px;min-width:88px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:99999;}
+    #langDd.open{display:block}
+    .lang-opt{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:5px;font-size:13px;font-weight:600;color:#94a3b8;cursor:pointer;transition:background .12s,color .12s;user-select:none}
+    .lang-opt:hover{background:rgba(255,255,255,.1);color:#fff}
+    .lang-opt--on{background:rgba(255,255,255,.15);color:#fff}
+
+    /* ── TELA DE LOGIN ─────────────────────────────────────── */
+    #lcbLoginScreen {
+      position:fixed;inset:0;z-index:9999;
+      background:#041e42;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      font-family:'ScaniaSans','Segoe UI',system-ui,Arial,sans-serif;
+      transition:opacity .4s ease;
+    }
+    #lcbLoginScreen.fade-out { opacity:0; pointer-events:none; }
+  </style>
 </head>
 <body>
+
+<!-- ── TELA DE LOGIN ──────────────────────────────────────────────────── -->
+<div id="lcbLoginScreen">
+  <img src="Images/Logo scania parte de cima.png" alt="Scania"
+    style="height:72px;width:auto;object-fit:contain;margin-bottom:32px;">
+
+  <div style="background:#fff;border-radius:10px;padding:40px 48px;width:100%;
+              max-width:460px;box-shadow:0 24px 64px rgba(0,0,0,.4);
+              display:flex;flex-direction:column;">
+
+    <p style="font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+              font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+              color:#94a3b8;margin-bottom:10px;">Scania Latin America</p>
+    <h1 style="font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+               font-size:1.15rem;font-weight:700;color:#041e42;letter-spacing:.03em;
+               text-transform:uppercase;line-height:1.05;margin-bottom:24px;white-space:nowrap;">
+      LCB Capacity Analytics
+    </h1>
+
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:18px;">
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:.68rem;font-weight:700;text-transform:uppercase;
+                      letter-spacing:.06em;color:#475569;">Usuário</label>
+        <input id="lcbLoginUser" type="text" placeholder="usuario.scania"
+          autocomplete="username"
+          style="padding:10px 12px;border:1.5px solid #dde2e9;border-radius:5px;
+                 font-family:inherit;font-size:.875rem;color:#0a1628;outline:none;
+                 transition:border-color .14s;background:#fff;"
+          onfocus="this.style.borderColor='#041e42';this.style.boxShadow='0 0 0 3px rgba(4,30,66,.10)'"
+          onblur="this.style.borderColor='#dde2e9';this.style.boxShadow='none'">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:.68rem;font-weight:700;text-transform:uppercase;
+                      letter-spacing:.06em;color:#475569;">Senha</label>
+        <input id="lcbLoginPass" type="password" placeholder="••••••••"
+          autocomplete="current-password"
+          style="padding:10px 12px;border:1.5px solid #dde2e9;border-radius:5px;
+                 font-family:inherit;font-size:.875rem;color:#0a1628;outline:none;
+                 transition:border-color .14s;background:#fff;"
+          onfocus="this.style.borderColor='#041e42';this.style.boxShadow='0 0 0 3px rgba(4,30,66,.10)'"
+          onblur="this.style.borderColor='#dde2e9';this.style.boxShadow='none'">
+      </div>
+    </div>
+
+    <div id="lcbLoginError"
+      style="display:none;margin-bottom:14px;padding:9px 12px;
+             background:#fef2f2;border:1px solid #fca5a5;border-radius:5px;
+             font-size:.8rem;color:#dc2626;font-weight:600;">
+      ✕ &nbsp;Usuário ou senha incorretos.
+    </div>
+
+    <button id="lcbLoginBtn" type="button"
+      style="width:100%;padding:12px;background:#041e42;color:#fff;border:none;
+             border-radius:5px;font-family:'ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+             font-size:1rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+             cursor:pointer;transition:background .14s;margin-bottom:18px;"
+      onmouseover="this.style.background='#082d5c'"
+      onmouseout="if(!this.disabled)this.style.background='#041e42'">
+      Entrar
+    </button>
+
+    <p style="font-family:'ScaniaSansHeadline','ScaniaSansCondensed','ScaniaSans','Segoe UI',sans-serif;
+              font-size:.57rem;color:#94a3b8;text-align:center;margin-top:16px;
+              padding-top:14px;border-top:1px solid #f1f5f9;letter-spacing:.12em;
+              text-transform:uppercase;white-space:nowrap;">
+      Desenvolvido por <strong style="color:#64748b;font-weight:700;">Gustavo Sigoli</strong> · Scania LOLCE · 2026
+    </p>
+
+  </div>
+
+
+</div>
+
+<script>
+(function () {
+  const USERS = [
+    { user: "gustavo.sigoli", pass: "scania2026" },
+    { user: "admin",          pass: "lcb2026"    },
+  ];
+
+  /* Já autenticado nesta sessão? Oculta direto */
+  if (sessionStorage.getItem("lcb_auth") === "ok") {
+    document.getElementById("lcbLoginScreen").style.display = "none";
+  }
+
+  function shake(el) {
+    const steps = [-7, 7, -5, 5, -3, 0];
+    let i = 0;
+    const iv = setInterval(() => {
+      el.style.transform = `translateX(${steps[i++]}px)`;
+      if (i >= steps.length) { clearInterval(iv); el.style.transform = ""; }
+    }, 55);
+  }
+
+  window.lcbDoLogin = function () {
+    const user = document.getElementById("lcbLoginUser").value.trim().toLowerCase();
+    const pass = document.getElementById("lcbLoginPass").value;
+    const err  = document.getElementById("lcbLoginError");
+    const btn  = document.getElementById("lcbLoginBtn");
+    const card = btn.closest("div[style*='background:#fff']");
+
+    const ok = USERS.some(u => u.user === user && u.pass === pass);
+
+    if (ok) {
+      sessionStorage.setItem("lcb_auth", "ok");
+      btn.textContent         = "✓ Entrando…";
+      btn.style.background    = "#16a34a";
+      btn.disabled            = true;
+      err.style.display       = "none";
+      const screen = document.getElementById("lcbLoginScreen");
+      screen.classList.add("fade-out");
+      setTimeout(() => { screen.style.display = "none"; }, 420);
+    } else {
+      err.style.display = "block";
+      document.getElementById("lcbLoginPass").value = "";
+      document.getElementById("lcbLoginPass").focus();
+      if (card) shake(card);
+    }
+  };
+
+  document.getElementById("lcbLoginBtn")
+    .addEventListener("click", window.lcbDoLogin);
+
+  ["lcbLoginUser", "lcbLoginPass"].forEach(id => {
+    document.getElementById(id)
+      .addEventListener("keydown", e => { if (e.key === "Enter") window.lcbDoLogin(); });
+  });
+})();
+</script>
 
 <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 <div class="drawer-overlay" id="drawerOverlay" aria-hidden="true"></div>
@@ -33,31 +192,31 @@
 </aside>
 
 <div class="app-shell" id="app">
-
   <header class="app-header" role="banner">
     <button class="menu-toggle" id="menuToggle" type="button"
       aria-label="Alternar menu lateral" aria-expanded="true" aria-controls="sidebar">
-      <span aria-hidden="true"></span>
-      <span aria-hidden="true"></span>
-      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
     </button>
-    <span class="brand" aria-label="Scania">SCANIA</span>
-    <div class="header-divider" aria-hidden="true"></div>
-    <h1 class="app-title">LCB Capacity Analytics</h1>
-    <div class="header-actions">
-      <span class="header-timestamp" id="headerTimestamp">Último cálculo: <strong>—</strong></span>
-      <button class="btn-export" type="button" aria-label="Exportar relatório">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Exportar Relatório
+    <h1 class="app-title app-title--main">LCB Capacity Analytics</h1>
+    <div class="header-spacer"></div>
+    <div id="langWrap">
+      <button id="langBtn" type="button">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span id="langCurrentLabel">PT</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
+      <div id="langDd">
+        <div class="lang-opt lang-opt--on" data-lang="pt">🇧🇷 PT</div>
+        <div class="lang-opt" data-lang="en">🇺🇸 EN</div>
+      </div>
     </div>
+    <img src="Images/Logo scania parte de cima.png" alt="Scania" class="header-logo" aria-label="Scania">
   </header>
 
   <nav class="app-sidebar" id="sidebar" aria-label="Navegação principal">
     <div class="sidebar-inner">
       <p class="sidebar-section-label">Principal</p>
       <ul class="sidebar-nav" role="list">
-
         <li>
           <a class="nav-link active" href="#" data-page="analise" aria-current="page">
             <span class="nav-icon-wrap">
@@ -70,37 +229,17 @@
             <span class="nav-tag nav-tag--primary">Principal</span>
           </a>
         </li>
-
-        <li>
-          <a class="nav-link" href="#" data-page="chat" aria-current="false">
-            <span class="nav-icon-wrap">
-              <svg class="nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M17 10c0 3.866-3.134 7-7 7a6.97 6.97 0 0 1-3.5-.936L3 17l.936-3.5A6.97 6.97 0 0 1 3 10c0-3.866 3.134-7 7-7s7 3.134 7 7Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span class="nav-label">Assistente IA</span>
-            <span class="nav-tag nav-tag--ai">Beta</span>
-          </a>
-        </li>
-
       </ul>
       <div class="sidebar-footer-info">
         <div class="sidebar-footer-info__dot"></div>
         <span>LCB · Logistics Center Brazil</span>
       </div>
-      <div class="sidebar-footer-credit">
-        Desenvolvido por <strong>Gustavo Sigoli</strong>
-      </div>
+
     </div>
   </nav>
 
   <main class="app-main" id="mainContent">
-
-    <!-- ================================================================
-         TELA 1 — ANÁLISE DE CAPACIDADE (original, sem alterações)
-    ================================================================ -->
     <section id="screen-analise" class="screen screen--active" aria-label="Análise de Capacidade">
-
       <div class="page-header">
         <div class="page-header__left">
           <span class="page-header__eyebrow">
@@ -111,15 +250,11 @@
           <p class="page-subtitle">Carregue a lista de peças em PD, configure os parâmetros e valide se o LCB suporta a demanda projetada.</p>
         </div>
       </div>
-
       <div class="ca-layout">
-
-        <!-- COLUNA ESQUERDA -->
         <div class="ca-layout__inputs">
           <div class="panel">
             <h3 class="panel-title">Parâmetros da Análise</h3>
             <div class="ca-form">
-
               <div class="ca-divider"><span>Arquivo de PD</span></div>
               <div class="ca-field ca-field--upload">
                 <label class="ca-label">Upload Excel de PD</label>
@@ -130,118 +265,60 @@
                   <input type="file" id="excelInput" accept=".xlsx,.xls,.csv" aria-label="Upload de arquivo Excel">
                 </div>
                 <p class="ca-field__hint">Colunas esperadas: PN · Descrição · PE · Qtde PNs/Caixa · Daily Rate · Volume Contratado · storage_zone</p>
+                <div id="uploadProgressWrap" style="display:none" aria-live="polite">
+                  <div class="upload-progress__header">
+                    <span class="upload-progress__label" id="uploadProgressLabel">Processando…</span>
+                    <span class="upload-progress__pct" id="uploadProgressPct">0%</span>
+                  </div>
+                  <div class="upload-progress__track"><div class="upload-progress__fill" id="uploadProgressFill"></div></div>
+                </div>
               </div>
-
               <div class="ca-divider"><span>Capacidade LCB</span></div>
-
               <div class="ca-row ca-row--single">
                 <div class="ca-field">
                   <label class="ca-label" for="caSafetyMargin">Margem de Segurança (%)</label>
                   <input type="number" id="caSafetyMargin" class="ca-input" value="10" min="0" max="50">
                 </div>
               </div>
-
               <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapPortaPalletsB10">Porta Pallets Base 10</label>
-                  <input type="number" id="caLcbCapPortaPalletsB10" class="ca-input" value="35766" min="0">
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapPortaPalletsB20">Porta Pallets Base 20</label>
-                  <input type="number" id="caLcbCapPortaPalletsB20" class="ca-input" value="19193" min="0">
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caLcbCapPortaPalletsB10">Porta Pallets Base 10</label><input type="number" id="caLcbCapPortaPalletsB10" class="ca-input" value="35766" min="0"></div>
+                <div class="ca-field"><label class="ca-label" for="caLcbCapPortaPalletsB20">Porta Pallets Base 20</label><input type="number" id="caLcbCapPortaPalletsB20" class="ca-input" value="19193" min="0"></div>
               </div>
-
               <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapBlueBoxB10">Blue Box Base 10</label>
-                  <input type="number" id="caLcbCapBlueBoxB10" class="ca-input" value="2717" min="0">
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapBlueBoxB20">Blue Box Base 20</label>
-                  <input type="number" id="caLcbCapBlueBoxB20" class="ca-input" value="13983" min="0">
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caLcbCapBlueBoxB10">Blue Box Base 10</label><input type="number" id="caLcbCapBlueBoxB10" class="ca-input" value="2717" min="0"></div>
+                <div class="ca-field"><label class="ca-label" for="caLcbCapBlueBoxB20">Blue Box Base 20</label><input type="number" id="caLcbCapBlueBoxB20" class="ca-input" value="13983" min="0"></div>
               </div>
-
               <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapBlueBoxIndividual">Blue Box Individual</label>
-                  <input type="number" id="caLcbCapBlueBoxIndividual" class="ca-input" value="39284" min="0">
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapBlocado">Blocado</label>
-                  <input type="number" id="caLcbCapBlocado" class="ca-input" value="3290" min="0">
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caLcbCapBlueBoxIndividual">Blue Box Individual</label><input type="number" id="caLcbCapBlueBoxIndividual" class="ca-input" value="39284" min="0"></div>
+                <div class="ca-field"><label class="ca-label" for="caLcbCapBlocado">Blocado</label><input type="number" id="caLcbCapBlocado" class="ca-input" value="3290" min="0"></div>
               </div>
-
               <div class="ca-row ca-row--single">
-                <div class="ca-field">
-                  <label class="ca-label" for="caLcbCapTMX">T;M;4;0;X;90</label>
-                  <input type="number" id="caLcbCapTMX" class="ca-input" value="5276" min="0">
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caLcbCapTMX">T;M;4;0;X;90</label><input type="number" id="caLcbCapTMX" class="ca-input" value="5276" min="0"></div>
               </div>
-
               <div class="ca-divider"><span>Ocupadas por Tipo</span></div>
-
               <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caCapPortaPalletsB10">Porta Pallets Base 10</label>
-                  <input type="number" id="caCapPortaPalletsB10" class="ca-input" value="25131" min="0">
-                  <span class="ca-field__disp" id="dispPortaPalletsB10">Disponível: —</span>
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caCapPortaPalletsB20">Porta Pallets Base 20</label>
-                  <input type="number" id="caCapPortaPalletsB20" class="ca-input" value="14357" min="0">
-                  <span class="ca-field__disp" id="dispPortaPalletsB20">Disponível: —</span>
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caCapPortaPalletsB10">Porta Pallets Base 10</label><input type="number" id="caCapPortaPalletsB10" class="ca-input" value="25131" min="0"><span class="ca-field__disp" id="dispPortaPalletsB10">Disponível: —</span></div>
+                <div class="ca-field"><label class="ca-label" for="caCapPortaPalletsB20">Porta Pallets Base 20</label><input type="number" id="caCapPortaPalletsB20" class="ca-input" value="14357" min="0"><span class="ca-field__disp" id="dispPortaPalletsB20">Disponível: —</span></div>
               </div>
-
               <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caCapBlueBoxB10">Blue Box Base 10</label>
-                  <input type="number" id="caCapBlueBoxB10" class="ca-input" value="1520" min="0">
-                  <span class="ca-field__disp" id="dispBlueBoxB10">Disponível: —</span>
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caCapBlueBoxB20">Blue Box Base 20</label>
-                  <input type="number" id="caCapBlueBoxB20" class="ca-input" value="10437" min="0">
-                  <span class="ca-field__disp" id="dispBlueBoxB20">Disponível: —</span>
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caCapBlueBoxB10">Blue Box Base 10</label><input type="number" id="caCapBlueBoxB10" class="ca-input" value="1520" min="0"><span class="ca-field__disp" id="dispBlueBoxB10">Disponível: —</span></div>
+                <div class="ca-field"><label class="ca-label" for="caCapBlueBoxB20">Blue Box Base 20</label><input type="number" id="caCapBlueBoxB20" class="ca-input" value="10437" min="0"><span class="ca-field__disp" id="dispBlueBoxB20">Disponível: —</span></div>
               </div>
-
               <div class="ca-row">
-                <div class="ca-field">
-                  <label class="ca-label" for="caCapBlueBoxIndividual">Blue Box Individual</label>
-                  <input type="number" id="caCapBlueBoxIndividual" class="ca-input" value="24574" min="0">
-                  <span class="ca-field__disp" id="dispBlueBoxIndividual">Disponível: —</span>
-                </div>
-                <div class="ca-field">
-                  <label class="ca-label" for="caCapBlocado">Blocado</label>
-                  <input type="number" id="caCapBlocado" class="ca-input" value="2612" min="0">
-                  <span class="ca-field__disp" id="dispBlocado">Disponível: —</span>
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caCapBlueBoxIndividual">Blue Box Individual</label><input type="number" id="caCapBlueBoxIndividual" class="ca-input" value="24574" min="0"><span class="ca-field__disp" id="dispBlueBoxIndividual">Disponível: —</span></div>
+                <div class="ca-field"><label class="ca-label" for="caCapBlocado">Blocado</label><input type="number" id="caCapBlocado" class="ca-input" value="2612" min="0"><span class="ca-field__disp" id="dispBlocado">Disponível: —</span></div>
               </div>
-
               <div class="ca-row ca-row--single">
-                <div class="ca-field">
-                  <label class="ca-label" for="caCapTMX">T;M;4;0;X;90</label>
-                  <input type="number" id="caCapTMX" class="ca-input" value="4443" min="0">
-                  <span class="ca-field__disp" id="dispTMX">Disponível: —</span>
-                </div>
+                <div class="ca-field"><label class="ca-label" for="caCapTMX">T;M;4;0;X;90</label><input type="number" id="caCapTMX" class="ca-input" value="4443" min="0"><span class="ca-field__disp" id="dispTMX">Disponível: —</span></div>
               </div>
-
               <button class="ca-btn-calc" id="btnCalcAnalise" type="button">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Calcular Análise
               </button>
-
             </div>
           </div>
         </div>
-
-        <!-- COLUNA DIREITA -->
         <div class="ca-layout__results" aria-live="polite">
-
           <div class="panel ca-result-placeholder" id="caResultPlaceholder">
             <div class="ca-placeholder-icon">📊</div>
             <p class="ca-placeholder-title">Nenhuma análise realizada</p>
@@ -249,9 +326,7 @@
             <p class="ca-placeholder-sub">Você também pode usar os dados de exemplo para explorar a ferramenta.</p>
             <button class="ca-btn-mock" id="btnUseMock" type="button">Usar Dados de Exemplo</button>
           </div>
-
           <div id="caResultCards" class="ca-result-cards" style="display:none">
-
             <div class="ca-verdict" id="caVerdict">
               <div class="ca-verdict__icon" id="caVerdictIcon">✓</div>
               <div class="ca-verdict__text">
@@ -263,14 +338,11 @@
                 Ver Detalhes
               </button>
             </div>
-
             <div class="panel ca-engine-panel">
               <h3 class="panel-title">Cálculo da Capacidade Disponível (caixas)</h3>
               <div id="caEngineContainer"></div>
             </div>
-
             <div class="ca-main-content-row">
-
               <div class="panel ca-composition-panel">
                 <h3 class="panel-title">Composição da Ocupação</h3>
                 <div class="ca-donut-container">
@@ -282,21 +354,18 @@
                 </div>
                 <ul class="ca-donut-legend" id="caDonutLegendList" role="list"></ul>
               </div>
-
               <div class="panel ca-map-panel">
                 <div class="ca-map-panel__header">
                   <h3 class="panel-title">Layout Digital do LCB</h3>
                   <span class="panel-badge">Digital Twin 2D</span>
                 </div>
-
                 <div class="ca-map-controls">
                   <div class="ca-map-control-item">
                     <span class="ca-map-control-label">Timeline</span>
                     <div class="ca-map-timeline">
                       <span class="timeline-edge">JAN</span>
                       <div class="slider-track-wrap ca-map-slider-wrap">
-                        <input type="range" id="timelineRange" class="timeline-slider" min="0" max="23" value="0" step="1"
-                               aria-label="Período de análise" aria-valuetext="JAN/2026">
+                        <input type="range" id="timelineRange" class="timeline-slider" min="0" max="23" value="0" step="1" aria-label="Período de análise" aria-valuetext="JAN/2026">
                         <div class="slider-progress" id="sliderProgress"></div>
                       </div>
                       <span class="timeline-edge">DEZ</span>
@@ -306,23 +375,17 @@
                   <div class="ca-map-control-item ca-map-control-item--right">
                     <span class="ca-map-control-label">Vol. Atual</span>
                     <div class="ca-map-production">
-                      <input type="number" id="caVolumeFuturo"
-                             class="ca-map-production-input ca-map-production-input--atual ca-map-production-input--bold"
-                             value="0" min="0" max="9999" aria-label="Volume de produto atual (veíc./dia)">
+                      <input type="number" id="caVolumeFuturo" class="ca-map-production-input ca-map-production-input--atual ca-map-production-input--bold" value="" placeholder="0" min="0" max="9999" aria-label="Volume de produto atual (veíc./dia)">
                     </div>
                     <span class="ca-map-vol-sep" aria-hidden="true">→</span>
                     <span class="ca-map-control-label">Vol. Futuro</span>
                     <div class="ca-map-production">
-                      <input type="number" id="productionVolume"
-                             class="ca-map-production-input"
-                             value="75" min="0" max="999" aria-label="Volume de produção futura (veíc./dia)">
+                      <input type="number" id="productionVolume" class="ca-map-production-input" value="0" min="0" max="999" aria-label="Volume de produção futura (veíc./dia)">
                       <span class="ca-map-production-unit">veíc./dia</span>
                     </div>
                   </div>
                 </div>
-
-                <div class="warehouse-map" id="warehouseMap"
-                     role="img" aria-label="Mapa interativo do armazém LCB com zonas de armazenagem">
+                <div class="warehouse-map" id="warehouseMap" role="img" aria-label="Mapa interativo do armazém LCB com zonas de armazenagem">
                   <img src="Images/Layout LCB 4K.png" alt="Layout LCB 4K — Scania" class="lcb-floor-plan" draggable="false"/>
                   <div class="zone-tooltip" id="zoneTooltip" aria-hidden="true">
                     <div class="tooltip-header">
@@ -337,7 +400,6 @@
                     </div>
                   </div>
                 </div>
-
                 <div class="ca-map-footer">
                   <div class="ca-map-footer__left">
                     <span class="ca-map-footer__label">Cálculo da Capacidade</span>
@@ -347,148 +409,12 @@
                     <span class="ca-map-footer__status-text" id="warehouseTriggerSub">Mapa do LCB com indicadores em tempo real</span>
                   </div>
                 </div>
-
               </div>
-
             </div>
-
           </div>
-
         </div>
       </div>
-
     </section>
-
-    <!-- ================================================================
-         TELA 2 — ASSISTENTE IA (nova)
-    ================================================================ -->
-    <section id="screen-chat" class="screen" aria-label="Assistente IA">
-
-      <div class="page-header">
-        <div class="page-header__left">
-          <span class="page-header__eyebrow">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            Assistente IA
-          </span>
-          <h2 class="page-title">Assistente de Capacidade LCB</h2>
-          <p class="page-subtitle">Faça perguntas sobre ocupação, riscos e expansão do armazém em linguagem natural.</p>
-        </div>
-      </div>
-
-      <div class="chat-screen-layout">
-
-        <!-- Painel lateral de contexto -->
-        <aside class="chat-context-panel">
-
-          <div class="chat-context-panel__header">
-            <span class="chat-context-panel__title">Contexto Ativo</span>
-          </div>
-
-          <div class="chat-context-section">
-            <span class="chat-context-label">Dados do armazém</span>
-            <div id="chatContextStatus" class="chat-context-status chat-context-status--empty">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Nenhum dado carregado
-            </div>
-            <button class="chat-context-btn" id="chatBtnLoadContext">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M5 19h14"/></svg>
-              Usar dados da análise atual
-            </button>
-          </div>
-
-          <div class="chat-context-section">
-            <span class="chat-context-label">Ou cole dados manualmente</span>
-            <textarea
-              id="chatManualContext"
-              class="chat-manual-context"
-              placeholder="Zona, Ocupação, Capacidade&#10;Base 10, 94%, 35766&#10;Base 20, 61%, 19193&#10;..."
-              rows="6"
-            ></textarea>
-            <button class="chat-context-btn" id="chatBtnApplyManual">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Aplicar dados manuais
-            </button>
-          </div>
-
-          <div class="chat-context-section">
-            <span class="chat-context-label">Perguntas sugeridas</span>
-            <div class="chat-suggestions-list">
-              <button class="chat-suggestion-pill" data-text="Quais zonas estão em risco alto agora?">Zonas em risco alto</button>
-              <button class="chat-suggestion-pill" data-text="Onde devo investir em expansão?">Onde expandir</button>
-              <button class="chat-suggestion-pill" data-text="Qual a projeção da Base 10 nos próximos 30 dias?">Projeção Base 10</button>
-              <button class="chat-suggestion-pill" data-text="Quais projetos impactam mais a capacidade?">Projetos críticos</button>
-              <button class="chat-suggestion-pill" data-text="Faça um resumo geral do estado do armazém.">Resumo geral</button>
-              <button class="chat-suggestion-pill" data-text="Qual zona tem mais folga disponível para redistribuição?">Maior folga</button>
-            </div>
-          </div>
-
-          <div class="chat-context-section chat-context-section--actions">
-            <button class="chat-action-btn" id="chatBtnClear">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-              Limpar conversa
-            </button>
-            <button class="chat-action-btn" id="chatBtnExport">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Exportar conversa
-            </button>
-          </div>
-
-        </aside>
-
-        <!-- Painel principal do chat -->
-        <div class="chat-main-panel">
-
-          <div class="chat-panel-header">
-            <div class="chat-panel-header__avatar">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                <polyline points="2 17 12 22 22 17"/>
-                <polyline points="2 12 12 17 22 12"/>
-              </svg>
-            </div>
-            <div class="chat-panel-header__info">
-              <span class="chat-panel-header__name">Assistente LCB</span>
-              <span class="chat-panel-header__status">
-                <span class="chat-status-dot"></span>
-                Online · Logistics Center Brazil
-              </span>
-            </div>
-            <div id="chatContextBadge" class="chat-context-badge chat-context-badge--inactive">
-              Sem contexto
-            </div>
-          </div>
-
-          <div class="chat-messages-area" id="chatMessages"></div>
-
-          <div class="chat-input-panel">
-            <div class="chat-input-wrapper" id="chatInputWrapper">
-              <textarea
-                id="chatInput"
-                class="chat-input-textarea"
-                placeholder="Pergunte sobre ocupação, riscos, expansão..."
-                rows="1"
-                maxlength="500"
-              ></textarea>
-              <button class="chat-send-btn" id="chatSendBtn" aria-label="Enviar mensagem">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13"/>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
-              </button>
-            </div>
-            <div class="chat-input-meta">
-              <span>Enter para enviar · Shift+Enter nova linha</span>
-              <span id="chatCharCount">0 / 500</span>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-    </section>
-
   </main>
 </div>
 
@@ -501,11 +427,10 @@
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
-<script src="config.js" defer></script>
-<script src="api.js"          defer></script>
-<script src="zones-overlay.js" defer></script>
-<script src="app.js"          defer></script>
-<script src="chat.js"         defer></script>
+<script src="i18n.js"           defer></script>
+<script src="api.js"            defer></script>
+<script src="zones-overlay.js"  defer></script>
+<script src="app.js"            defer></script>
 
 </body>
 </html>
