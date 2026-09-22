@@ -1,12 +1,11 @@
 /**
- * LCB Capacity Analytics — api.js  (v4.4 — origem-distribution)
+ * LCB Capacity Analytics — api.js  (v4.3 — multi-projeto)
  *
  * Backend esperado:
  *   - POST /excel/upload
  *   - POST /excel/simulate
  *   - GET  /capacity/zones/summary
  *   - POST /capacity/zones/analyze
- *   - GET  /excel/origem-distribution   ← NOVO
  */
 
 "use strict";
@@ -17,11 +16,10 @@
 
 const API_BASE_URL = (window.LCB_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 const ENDPOINTS = {
-  upload:             `${API_BASE_URL}/excel/upload`,
-  simulate:           `${API_BASE_URL}/excel/simulate`,
-  zones:              `${API_BASE_URL}/capacity/zones/summary`,
-  zonesAnalyze:       `${API_BASE_URL}/capacity/zones/analyze`,
-  origemDistribution: `${API_BASE_URL}/excel/origem-distribution`,  // ← NOVO
+  upload:       `${API_BASE_URL}/excel/upload`,
+  simulate:     `${API_BASE_URL}/excel/simulate`,
+  zones:        `${API_BASE_URL}/capacity/zones/summary`,
+  zonesAnalyze: `${API_BASE_URL}/capacity/zones/analyze`,
 };
 
 /* =========================================================================
@@ -156,6 +154,9 @@ function _renderProjectCombo(projetos) {
       </div>
     </div>
 
+    <p class="ca-field__hint" id="projectComboHint">
+      ${projetos.length} projeto(s) encontrado(s) no arquivo.
+    </p>
   `;
 
   wrapper.style.display = "flex";
@@ -356,17 +357,14 @@ async function _runSimulationMulti(projetos) {
     _renderValidationAvisos(merged.avisos);
     _renderZonasInfo(merged.por_zona);
 
+    // Atualiza hint com distribuição por zona do merge
+    _renderZonasInfo(merged.por_zona);
+
     if (typeof window._onSimulacaoSuccess === "function") {
       window._onSimulacaoSuccess(calcResult);
     }
 
     await fetchZonesSummary();
-
-    // -----------------------------------------------------------------------
-    // Carrega e renderiza o gráfico de origem após simulação bem-sucedida
-    // -----------------------------------------------------------------------
-    _loadOrigemDistribution();
-
   } catch (err) {
     console.error("[LCB API] Erro na simulação:", err);
     _showUploadFeedback("error", `⚠️ ${err.message}`);
@@ -381,21 +379,26 @@ async function _runSimulationMulti(projetos) {
 ========================================================================= */
 
 function _mergeSimulResults(results, projetos) {
+  // Soma campos numéricos principais
   const totalVolume    = results.reduce((s, r) => s + (r.total_volume_periodo      ?? 0), 0);
   const totalProjOcc   = results.reduce((s, r) => s + (r.projected_occupation      ?? 0), 0);
   const totalAvailable = results.reduce((s, r) => s + (r.available_capacity        ?? 0), 0);
   const totalUsable    = results.reduce((s, r) => s + (r.usable_capacity           ?? 0), 0);
 
+  // Capacidade vem do campo (igual para todos, usa o primeiro)
   const capacity = results[0]?.capacity ?? Number(_elById("caLcbCapacity")?.value) ?? 140_000;
 
+  // Taxa de ocupação consolidada
   const occRate = capacity > 0 ? (totalProjOcc / capacity) * 100 : 0;
 
+  // Status consolidado (pior caso)
   const statusPriority = { critical: 2, warning: 1, ok: 0 };
   const worstStatus = results.reduce((worst, r) => {
     const s = r.status ?? "ok";
     return statusPriority[s] > statusPriority[worst] ? s : worst;
   }, "ok");
 
+  // Concatena todos os itens, marcando a origem
   const itens = results.flatMap((r, i) =>
     (r.itens ?? []).map((item) => ({
       ...item,
@@ -404,6 +407,7 @@ function _mergeSimulResults(results, projetos) {
     }))
   );
 
+  // Agrega por_zona somando os valores
   const por_zona = {};
   results.forEach((r) => {
     Object.entries(r.por_zona ?? {}).forEach(([zona, val]) => {
@@ -411,15 +415,18 @@ function _mergeSimulResults(results, projetos) {
     });
   });
 
+  // Agrega avisos sem duplicatas
   const avisos = [...new Set(results.flatMap((r) => r.avisos ?? []))];
 
+  // Nome do projeto combinado
   const nomeProjeto = projetos.length === 1
     ? projetos[0]
     : projetos.join(" + ");
 
   return {
+    // Campos que o app.js espera
     projeto:              nomeProjeto,
-    projetos:             projetos.map((nome) => ({ id: nome, nome })),
+    projetos:             projetos.map((nome, i) => ({ id: nome, nome })),
     total_volume_periodo: totalVolume,
     projected_occupation: totalProjOcc,
     available_capacity:   totalAvailable,
@@ -430,6 +437,7 @@ function _mergeSimulResults(results, projetos) {
     itens,
     por_zona,
     avisos,
+    // Zones do primeiro resultado (estrutura de detalhes por zona)
     zones:  results[0]?.zones ?? [],
   };
 }
@@ -495,254 +503,6 @@ async function runMLAnalysis(projeto) {
   } finally {
     _setMLLoading(false);
   }
-}
-
-/* =========================================================================
-   ORIGEM DISTRIBUTION — busca e renderiza o gráfico
-========================================================================= */
-
-// Instância do Chart.js do gráfico de origem (para destruir antes de recriar)
-let _origemChartInstance = null;
-
-async function _loadOrigemDistribution() {
-  try {
-    const response = await fetch(ENDPOINTS.origemDistribution);
-    if (!response.ok) {
-      console.warn("[LCB API] origem-distribution não disponível:", response.status);
-      return;
-    }
-    const data = await response.json();
-    _renderOrigemChart(data);
-  } catch (err) {
-    console.warn("[LCB API] Erro ao carregar origem-distribution:", err.message);
-  }
-}
-
-/**
- * Renderiza (ou atualiza) o gráfico de barras de origem no painel
- * identificado por #origemChartPanel.
- *
- * Estrutura esperada de `data`:
- *   {
- *     distribuicao: [{ project, origem, count, pct, lead_time_dias }],
- *     totais: { Nacional: { count, pct, lead_time_dias }, ... },
- *     total_itens: number
- *   }
- */
-function _renderOrigemChart(data) {
-  // -------------------------------------------------------------------
-  // 1. Garante que o painel existe no DOM; se não, cria e injeta
-  // -------------------------------------------------------------------
-  let panel = document.getElementById("origemChartPanel");
-  if (!panel) {
-    panel = _createOrigemPanel();
-    // Injeta dentro do painel do donut, logo após a legenda (#caDonutLegendList)
-    const donutLegend = document.getElementById("caDonutLegendList");
-    if (donutLegend) {
-      donutLegend.insertAdjacentElement("afterend", panel);
-    } else {
-      // Fallback: adiciona ao final de caResultCards
-      const cards = document.getElementById("caResultCards");
-      if (cards) cards.appendChild(panel);
-    }
-  }
-
-  // -------------------------------------------------------------------
-  // 2. Processa dados
-  // -------------------------------------------------------------------
-  const { distribuicao = [], totais = {}, total_itens = 0 } = data;
-
-  const CORES = {
-    Nacional:  "#2a78d6",
-    Importado: "#eb6834",
-    China:     "#e34948",
-  };
-  const LEAD_TIME = {
-    Nacional:  9,
-    Importado: 15,
-    China:     25,
-  };
-
-  // Projetos únicos preservando ordem de aparição
-  const projetos = [...new Set(distribuicao.map(d => d.project))];
-
-  // Datasets por origem
-  const origens = ["Nacional", "Importado", "China"];
-  const datasets = origens.map(origem => ({
-    label: origem,
-    data: projetos.map(proj => {
-      const entry = distribuicao.find(d => d.project === proj && d.origem === origem);
-      return entry ? entry.count : 0;
-    }),
-    backgroundColor: CORES[origem],
-    borderRadius: 4,
-    borderSkipped: false,
-    barPercentage: 0.45,
-    categoryPercentage: 0.5,
-  }));
-
-  // -------------------------------------------------------------------
-  // 3. KPI cards de totais
-  // -------------------------------------------------------------------
-  const kpiContainer = document.getElementById("origemKpiRow");
-  if (kpiContainer) {
-    kpiContainer.innerHTML = origens.map(o => {
-      const t  = totais[o] ?? { count: 0, pct: 0 };
-      const lt = LEAD_TIME[o];
-      return `
-        <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;flex:1 1 80px;min-width:0;">
-          <span style="width:8px;height:8px;border-radius:50%;background:${CORES[o]};flex-shrink:0;"></span>
-          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
-            <span style="font-size:10px;color:#64748b;font-weight:500;">${o}</span>
-            <strong style="font-size:16px;color:#0f172a;line-height:1.1;">${t.count}</strong>
-            <span style="font-size:10px;color:#94a3b8;">${t.pct}%</span>
-          </div>
-        </div>`;
-    }).join("");
-  }
-
-  // -------------------------------------------------------------------
-  // 4. Renderiza / atualiza Chart.js
-  // -------------------------------------------------------------------
-  const canvas = document.getElementById("origemBarChart");
-  if (!canvas || typeof Chart === "undefined") return;
-
-  if (_origemChartInstance) {
-    _origemChartInstance.destroy();
-    _origemChartInstance = null;
-  }
-
-  // Trunca labels longos
-  const labels = projetos.map(p => p.length > 22 ? p.slice(0, 20) + "…" : p);
-
-  _origemChartInstance = new Chart(canvas, {
-    type: "bar",
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "#001533",
-          bodyColor: "#fff",
-          padding: 10,
-          cornerRadius: 8,
-          callbacks: {
-            afterBody(items) {
-              const idx  = items[0].dataIndex;
-              const proj = projetos[idx];
-              const tot  = distribuicao
-                .filter(d => d.project === proj)
-                .reduce((s, d) => s + d.count, 0);
-
-              const linhas = [``, `Total: ${tot} itens`];
-              origens.forEach(o => {
-                const entry = distribuicao.find(d => d.project === proj && d.origem === o);
-                if (entry && entry.count > 0) {
-                  linhas.push(`  ${o}: ${entry.count} (${entry.pct}%) · ${LEAD_TIME[o]}d`);
-                }
-              });
-              return linhas;
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          stacked: true,
-          grid: { display: false },
-          ticks: {
-            color: "#64748b",
-            font: { size: 11 },
-            maxRotation: 35,
-            autoSkip: false,
-          },
-        },
-        y: {
-          stacked: true,
-          grid: { color: "rgba(0,0,0,0.06)" },
-          ticks: { color: "#64748b", font: { size: 11 } },
-          title: {
-            display: true,
-            text: "Qtd. itens",
-            color: "#64748b",
-            font: { size: 11 },
-          },
-        },
-      },
-    },
-    plugins: [_origemTotalsPlugin(projetos, distribuicao)],
-  });
-}
-
-/**
- * Plugin Chart.js que desenha o total empilhado acima de cada barra.
- */
-function _origemTotalsPlugin(projetos, distribuicao) {
-  return {
-    id: "origemTotals",
-    afterDatasetsDraw(chart) {
-      const { ctx, scales: { x, y } } = chart;
-      ctx.save();
-      projetos.forEach((proj, i) => {
-        const tot = distribuicao
-          .filter(d => d.project === proj)
-          .reduce((s, d) => s + d.count, 0);
-        if (!tot) return;
-        const xPos = x.getPixelForValue(i);
-        const yPos = y.getPixelForValue(tot);
-        ctx.fillStyle = "#475569";
-        ctx.font      = "500 11px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(tot, xPos, yPos - 5);
-      });
-      ctx.restore();
-    },
-  };
-}
-
-/**
- * Cria o painel HTML do gráfico de origem e retorna o elemento.
- * Chamado apenas uma vez (na primeira vez que dados chegam).
- */
-function _createOrigemPanel() {
-  const panel = document.createElement("div");
-  // Sem classe "panel" — fica embutido dentro do ca-composition-panel
-  panel.id = "origemChartPanel";
-  panel.style.cssText = "margin-top:28px; border-top:2px solid #e2e8f0; padding-top:20px;";
-
-  panel.innerHTML = `
-    <div style="margin-bottom:6px;">
-      <span style="font-size:12px;font-weight:600;color:#334155;display:block;margin-bottom:6px;">Distribuição por Origem</span>
-      <div style="display:flex;align-items:center;gap:10px;white-space:nowrap;">
-        <span style="font-size:10px;color:#94a3b8;font-weight:600;">LEAD TIME</span>
-        <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#475569;">
-          <span style="width:8px;height:8px;border-radius:2px;background:#2a78d6;flex-shrink:0;display:inline-block;"></span>
-          Nacional <strong style="color:#0f172a;">9d</strong>
-        </span>
-        <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#475569;">
-          <span style="width:8px;height:8px;border-radius:2px;background:#eb6834;flex-shrink:0;display:inline-block;"></span>
-          Importado <strong style="color:#0f172a;">15d</strong>
-        </span>
-        <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#475569;">
-          <span style="width:8px;height:8px;border-radius:2px;background:#e34948;flex-shrink:0;display:inline-block;"></span>
-          China <strong style="color:#0f172a;">25d</strong>
-        </span>
-      </div>
-    </div>
-
-    <div id="origemKpiRow" style="display:flex;gap:12px;margin-top:14px;margin-bottom:18px;flex-wrap:wrap;"></div>
-
-    <div style="position:relative;width:100%;height:160px;">
-      <canvas id="origemBarChart"
-        role="img"
-        aria-label="Gráfico de barras empilhadas mostrando distribuição de itens por origem (Nacional, Importado, China) para cada projeto">
-      </canvas>
-    </div>
-  `;
-
-  return panel;
 }
 
 /* =========================================================================
@@ -831,7 +591,7 @@ function _renderTableFromSimulacao(itens) {
   ];
 
   body.innerHTML = itens.map((item) => {
-    const projIdx   = _selectedProjects.indexOf(item._projeto ?? item.projeto ?? "");
+    const projIdx  = _selectedProjects.indexOf(item._projeto ?? item.projeto ?? "");
     const projColor = projIdx >= 0 ? PALETTE[projIdx % PALETTE.length] : "#475569";
     return `
       <tr>
@@ -918,9 +678,12 @@ async function runIfFileLoaded(onSuccess, onNoFile) {
     if (data.projetos?.length) {
       _renderProjectCombo(data.projetos);
 
+      // Auto-simula se só houver 1 projeto (já feito dentro de _renderProjectCombo)
+      // Se _selectedProjects já tem seleção prévia válida, re-simula
       if (_selectedProjects.length > 0) {
         await _runSimulationMulti(_selectedProjects);
       } else if (data.projetos.length > 1) {
+        // Mais de 1 projeto: aguarda o usuário escolher
         _setCalcLoading(false);
       }
     } else {
@@ -954,6 +717,4 @@ window.lcbApi = {
   getLastZonesResult,
   getLastMLResult,
   getSelectedProjects,
-  // Exposto para uso manual caso necessário
-  loadOrigemDistribution: _loadOrigemDistribution,
 };
